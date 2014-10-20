@@ -17,12 +17,15 @@ parser.add_argument("-g", "--logging", type=common.str2bool, metavar="on/off", h
 args = parser.parse_args()
 
 # Load configurations
-configurations = common.SystemConfiguration(args.configFilePath)
-if (args.verbose is not None): configurations.config["server"]["verbose"] = args.verbose
-if (args.logging is not None): configurations.config["server"]["logging"] = args.logging
+config = common.loadConfig(args.configFilePath)
+if (args.verbose is not None): config["server"]["verbose"] = args.verbose
+if (args.logging is not None): config["server"]["logging"] = args.logging
 
 # Start server
-server = serverlib.ThreadedTCPServer(configurations, persistence.MySQLPersistenceHandler)
-server.addFilter(filters.BaseFilter())
+server = serverlib.ThreadedTCPServer(config, persistence.MySQLPersistenceHandler)
+# You can add filters to the server before start it
+server.addFilter(filters.BaseFilter)
+#server.addFilter(filters.BaseFilter, "MyFilterName")
+#server.addFilter(filters.BaseFilter, "ParallelFilter", parallel=True)
 server.start()
                 

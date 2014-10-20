@@ -6,6 +6,7 @@ import json
 import threading
 import logging
 import SocketServer
+import common
 from datetime import datetime
 
 
@@ -30,13 +31,16 @@ getIDLock = threading.Lock()
 
 # ==================== Classes ====================
 class ServerHandler(SocketServer.BaseRequestHandler):
+    def setup(self):
+        # Get filters instances
+        self.parallelFilters = [FilterClass(filterName) for (FilterClass, filterName) in self.server.ParallelFiltersClasses]
+        self.sequentialFilters = [FilterClass(filterName) for (FilterClass, filterName) in self.server.SequentialFiltersClasses]
+
     def handle(self):
-        # Define local method names for class variables 
+        # Define some local variables
         config = self.server.config
-        client = self.request
-    
-        # Open database connection
-        persist = self.server.PersistenceHandlerClass(config["persistence"]["database"]["user"], config["persistence"]["database"]["password"], config["persistence"]["database"]["host"], config["persistence"]["database"]["name"], config["persistence"]["database"]["table"])
+        client = common.NetworkHandler(self.request)
+        persist = self.server.PersistenceHandlerClass(config["persistence"])
         status = persist.statusCodes
     
         # Start to handle
@@ -44,16 +48,15 @@ class ServerHandler(SocketServer.BaseRequestHandler):
         running = True
         while (running):
             try: 
-                response = client.recv(config["global"]["connection"]["bufsize"])
+                message = client.recv()
                 
                 # Stop thread execution if the client has closed the connection
-                if (not response): 
-                    if (config["server"]["logging"]): logging.info("Client %d disconnected itself." % clientID)
-                    if (config["server"]["verbose"]): print "Client %d disconnected itself." % clientID
+                if (not message): 
+                    if (config["server"]["logging"]): logging.info("Connection to client %d closed." % clientID)
+                    if (config["server"]["verbose"]): print "Connection to client %d closed." % clientID
                     running = False
                     continue
 
-                message = json.loads(response)
                 command = message["command"]
                 
                 if (command == "GET_LOGIN"):
@@ -62,12 +65,11 @@ class ServerHandler(SocketServer.BaseRequestHandler):
                         clientID = nextFreeID
                         nextFreeID += 1
                     clientName = message["name"]
-                    #clientAddress = (socket.gethostbyaddr(client.getpeername()[0])[0], client.getpeername()[1])
-                    clientAddress = client.getpeername()
+                    clientAddress = client.getaddress()
                     clientPid = message["processid"]
                     clientsInfo[clientID] = [clientName, clientAddress, clientPid, None, 0, datetime.now(), None]
                     clientsThreads[clientID] = (threading.current_thread(), threading.Event())
-                    client.send(json.dumps({"command": "GIVE_LOGIN", "clientid": clientID}))
+                    client.send({"command": "GIVE_LOGIN", "clientid": clientID})
                     if (config["server"]["logging"]): logging.info("New client connected: %d" % clientID)
                     if (config["server"]["verbose"]): print "New client connected: %d" % clientID
                 
@@ -85,10 +87,10 @@ class ServerHandler(SocketServer.BaseRequestHandler):
                             clientsInfo[clientID][4] += 1
                             clientsInfo[clientID][6] = datetime.now()
                             filters = self.applyFilters(resourceID, responseCode, annotation)
-                            client.send(json.dumps({"command": "GIVE_ID", "resourceid": resourceID, "filters": filters}))
+                            client.send({"command": "GIVE_ID", "resourceid": resourceID, "filters": filters})
                         # If there isn't any more resources to collect, finish client
                         else:
-                            client.send(json.dumps({"command": "FINISH"}))
+                            client.send({"command": "FINISH"})
                             del clientsInfo[clientID]
                             running = False
                             # If there isn't any more clients to finish, finish server
@@ -98,7 +100,7 @@ class ServerHandler(SocketServer.BaseRequestHandler):
                                 if (config["server"]["verbose"]): print "Task done, server finished."
                     # If the client has been removed, kill it
                     else:
-                        client.send(json.dumps({"command": "KILL"}))
+                        client.send({"command": "KILL"})
                         del clientsInfo[clientID]
                         if (config["server"]["logging"]): logging.info("Client %d removed." % clientID)
                         if (config["server"]["verbose"]): print "Client %d removed." % clientID
@@ -110,7 +112,7 @@ class ServerHandler(SocketServer.BaseRequestHandler):
                     clientResponseCode = message["responsecode"]
                     clientAnnotation = message["annotation"]
                     persist.updateResource(clientResourceID, status["SUCCEDED"], clientResponseCode, clientAnnotation, clientName)
-                    client.send(json.dumps({"command": "DID_OK"}))
+                    client.send({"command": "DID_OK"})
                     
                 elif (command == "GET_STATUS"):
                     status = "\n" + (" Status (%s:%s/%s) " % (config["global"]["connection"]["address"], config["global"]["connection"]["port"], os.getpid())).center(50, ':') + "\n\n"
@@ -134,7 +136,7 @@ class ServerHandler(SocketServer.BaseRequestHandler):
                     resourcesCollected = float(persist.resourcesCollectedCount())
                     collectedResourcesPercent = (resourcesCollected / resourcesTotal) * 100
                     status += "\n" + (" Status (%.1f%% collected) " % (collectedResourcesPercent)).center(50, ':') + "\n"
-                    client.send(json.dumps({"command": "GIVE_STATUS", "status": status}))
+                    client.send({"command": "GIVE_STATUS", "status": status})
                     running = False
                     
                 elif (command == "RM_CLIENT"):
@@ -153,9 +155,9 @@ class ServerHandler(SocketServer.BaseRequestHandler):
                             if (config["server"]["logging"]): logging.info("Client %d removed." % ID)
                             if (config["server"]["verbose"]): print "Client %d removed." % ID
                         del clientsThreads[ID]
-                        client.send(json.dumps({"command": "RM_OK"}))
+                        client.send({"command": "RM_OK"})
                     else:
-                        client.send(json.dumps({"command": "RM_ERROR", "reason": "ID does not exist."}))
+                        client.send({"command": "RM_ERROR", "reason": "ID does not exist."})
                     running = False
                         
                 elif (command == "SHUTDOWN"):
@@ -172,13 +174,13 @@ class ServerHandler(SocketServer.BaseRequestHandler):
                             persist.updateResource(clientResourceID, status["AVAILABLE"], None, None, clientName)
                     while (threading.active_count() > 2): pass
                     self.server.shutdown()    
-                    client.send(json.dumps({"command": "SD_OK"}))
+                    client.send({"command": "SD_OK"})
                     if (config["server"]["logging"]): logging.info("Server manually shut down.")
                     if (config["server"]["verbose"]): print "Server manually shut down."
                     running = False
             
             except Exception as error:
-                if (config["server"]["logging"]): logging.exception("Exception while processing request from client %d. Execution of thread '%s' aborted." % (clientID, threading.current_thread().name))
+                if (config["server"]["logging"]): logging.exception("Exception while processing a request from client %d. Execution of thread '%s' aborted." % (clientID, threading.current_thread().name))
                 if (config["server"]["verbose"]): 
                     print "ERROR: %s" % str(error)
                     excType, excObj, excTb = sys.exc_info()
@@ -191,8 +193,8 @@ class ServerHandler(SocketServer.BaseRequestHandler):
         outputList.append({"filter": filter.getName(), "order": None, "data": data})
                 
     def applyFilters(self, resourceID, responseCode, annotation):
-        parallelFilters = self.server.parallelFilters
-        sequentialFilters = self.server.sequentialFilters
+        parallelFilters = self.parallelFilters
+        sequentialFilters = self.sequentialFilters
         filters = []
     
         # Start threaded filters
@@ -206,7 +208,7 @@ class ServerHandler(SocketServer.BaseRequestHandler):
         data = {}
         for filter in sequentialFilters:
             data = filter.apply(resourceID, responseCode, annotation, data.copy())
-            filters.append({"filter": filter.getName(), "order": sequentialFilters.index(filter), "data": data})
+            filters.append({"name": filter.getName(), "order": sequentialFilters.index(filter), "data": data})
             
         # Wait for threaded filters to finish
         for filter in filterThreads:
@@ -216,11 +218,11 @@ class ServerHandler(SocketServer.BaseRequestHandler):
                 
                 
 class ThreadedTCPServer(SocketServer.ThreadingMixIn, SocketServer.TCPServer):
-    def __init__(self, configurations, PersistenceHandlerClass):
-        self.config = configurations.config
+    def __init__(self, configurationsDictionary, PersistenceHandlerClass):
+        self.config = configurationsDictionary
         self.PersistenceHandlerClass = PersistenceHandlerClass
-        self.parallelFilters = []
-        self.sequentialFilters = []
+        self.ParallelFiltersClasses = []
+        self.SequentialFiltersClasses = []
         
         # Configure logging
         if (self.config["server"]["logging"]):
@@ -235,14 +237,8 @@ class ThreadedTCPServer(SocketServer.ThreadingMixIn, SocketServer.TCPServer):
         if (self.config["server"]["verbose"]): print "Server ready. Waiting for connections..."
         self.serve_forever()
         
-    def addFilter(self, filter, parallel=False):
+    def addFilter(self, FilterClass, filterName="", parallel=False):        
         if (parallel):
-            self.parallelFilters.append(filter)
+            self.ParallelFiltersClasses.append((FilterClass, filterName))
         else:
-            self.sequentialFilters.append(filter)
-            
-    def removeFilter(self, filter):
-        if filter in self.parallelFilters: self.parallelFilters.remove(filter)
-        elif filter in self.sequentialFilters: self.sequentialFilters.remove(filter)
-        else: raise IndexError("Specified instance of filter '%s' not found." % filter.getName()) 
-            
+            self.SequentialFiltersClasses.append((FilterClass, filterName))
