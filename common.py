@@ -8,7 +8,7 @@ import xmltodict
 # ==================== Classes ====================
 class NetworkHandler():  
     def __init__(self, socketObject=None):
-        if socketObject: self.sock = socketObject
+        if (socketObject): self.sock = socketObject
         else: self.sock = socket.socket()
         self.bufsize = 8192
         self.headersize = 15
@@ -35,10 +35,10 @@ class NetworkHandler():
         header = json.dumps({"last": True})
         packet = " ".join((header, splitMsg[-1]))
         self.sock.sendall(packet)
-    
+        
     def recv(self):
         strMsg = ""
-        while True:
+        while (True):
             packet = self.sock.recv(self.bufsize)
             if not packet: return None
             header = json.loads(packet[:self.headersize])

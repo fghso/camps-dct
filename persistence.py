@@ -9,9 +9,9 @@ class BasePersistenceHandler():
                    "SUCCEDED":   2, 
                    "FAILED":    -2}
 
-    def selectResource(self): return("resourceID", "responseCode", "annotation")
-    def updateResource(self, resourceID, responseCode, annotation, crawler): pass
-    def insertResource(self, resourceID, responseCode, annotation): pass
+    def selectResource(self): return ("resourceID", {})
+    def updateResource(self, resourceID, resourceInfo, status, crawler): pass
+    def insertResource(self, resourceID, resourceInfo): pass
     def totalResourcesCount(self): return 0
     def resourcesCollectedCount(self): return 0
     def resourcesSucceededCount(self): return 0
@@ -29,15 +29,18 @@ class MySQLPersistenceHandler(BasePersistenceHandler):
         cursor = self.mysqlConnection.cursor()
         cursor.execute(query, (self.statusCodes["AVAILABLE"],))
         resource = cursor.fetchone()
-        return resource if (resource) else [None] * 3
+        self.mysqlConnection.commit()
+        if resource: return (resource[0], {"responsecode": resource[1], "annotation": resource[2]})
+        else: return (None, None)
         
-    def updateResource(self, resourceID, status, responseCode, annotation, crawler):
+    def updateResource(self, resourceID, resourceInfo, status, crawler):
         query = "UPDATE " + self.selectConfig["table"] + " SET status = %s, response_code = %s, annotation = %s, crawler = %s WHERE resource_id = %s"
         cursor = self.mysqlConnection.cursor()
-        cursor.execute(query, (status, responseCode, annotation, crawler, resourceID))
+        if not resourceInfo: cursor.execute(query, (status, None, None, crawler, resourceID))
+        else: cursor.execute(query, (status, resourceInfo["responsecode"], resourceInfo["annotation"], crawler, resourceID))
         self.mysqlConnection.commit()
         
-    def insertResource(self, resourceID, responseCode, annotation): 
+    def insertResource(self, resourceID, resourceInfo): 
         pass
         
     def totalResourcesCount(self):

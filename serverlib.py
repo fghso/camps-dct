@@ -5,6 +5,7 @@ import os
 import json
 import threading
 import logging
+import time
 import SocketServer
 import common
 from datetime import datetime
@@ -75,43 +76,50 @@ class ServerHandler(SocketServer.BaseRequestHandler):
                 
                 elif (command == "GET_ID"):
                     clientStopEvent = clientsThreads[clientID][1]
-                    # If the client hasn't been removed, check resource to collect availability
-                    if (not clientStopEvent.is_set()):
-                        clientName = clientsInfo[clientID][0]
-                        with getIDLock:
-                            (resourceID, responseCode, annotation) = persist.selectResource()
-                            if (resourceID): persist.updateResource(resourceID, status["INPROGRESS"], None, None, clientName)
-                        # If there is a resource available, send ID to client
-                        if (resourceID):
-                            clientsInfo[clientID][3] = resourceID
-                            clientsInfo[clientID][4] += 1
-                            clientsInfo[clientID][6] = datetime.now()
-                            filters = self.applyFilters(resourceID, responseCode, annotation)
-                            client.send({"command": "GIVE_ID", "resourceid": resourceID, "filters": filters})
-                        # If there isn't any more resources to collect, finish client
+                    tryagain = True
+                    while (tryagain):
+                        tryagain = False
+                        # If the client hasn't been removed, check resource availability
+                        if (not clientStopEvent.is_set()):
+                            clientName = clientsInfo[clientID][0]
+                            with getIDLock:
+                                (resourceID, resourceInfo) = persist.selectResource()
+                                if (resourceID): persist.updateResource(resourceID, None, status["INPROGRESS"], clientName)
+                            # If there is a resource available, send ID to client
+                            if (resourceID):
+                                clientsInfo[clientID][3] = resourceID
+                                clientsInfo[clientID][4] += 1
+                                clientsInfo[clientID][6] = datetime.now()
+                                filters = self.applyFilters(resourceID, resourceInfo)
+                                client.send({"command": "GIVE_ID", "resourceid": resourceID, "filters": filters})
+                            else:
+                                # If there isn't resources available and loopforever is true, wait and check again
+                                if (config["server"]["loopforever"]): 
+                                    time.sleep(5)
+                                    tryagain = True
+                                # If there isn't resources available and loopforever is false, finish client
+                                else:
+                                    client.send({"command": "FINISH"})
+                                    del clientsInfo[clientID]
+                                    running = False
+                                    # If there isn't any more clients to finish, finish server
+                                    if (not clientsInfo):
+                                        self.server.shutdown()
+                                        if (config["server"]["logging"]): logging.info("Task done, server finished.")
+                                        if (config["server"]["verbose"]): print "Task done, server finished."
+                        # If the client has been removed, kill it
                         else:
-                            client.send({"command": "FINISH"})
+                            client.send({"command": "KILL"})
                             del clientsInfo[clientID]
+                            if (config["server"]["logging"]): logging.info("Client %d removed." % clientID)
+                            if (config["server"]["verbose"]): print "Client %d removed." % clientID
                             running = False
-                            # If there isn't any more clients to finish, finish server
-                            if (not clientsInfo):
-                                self.server.shutdown()
-                                if (config["server"]["logging"]): logging.info("Task done, server finished.")
-                                if (config["server"]["verbose"]): print "Task done, server finished."
-                    # If the client has been removed, kill it
-                    else:
-                        client.send({"command": "KILL"})
-                        del clientsInfo[clientID]
-                        if (config["server"]["logging"]): logging.info("Client %d removed." % clientID)
-                        if (config["server"]["verbose"]): print "Client %d removed." % clientID
-                        running = False
                     
                 elif (command == "DONE_ID"):
                     clientName = clientsInfo[clientID][0]
                     clientResourceID = message["resourceid"]
-                    clientResponseCode = message["responsecode"]
-                    clientAnnotation = message["annotation"]
-                    persist.updateResource(clientResourceID, status["SUCCEDED"], clientResponseCode, clientAnnotation, clientName)
+                    clientResourceInfo = message["resourceinfo"]
+                    persist.updateResource(clientResourceID, clientResourceInfo, status["SUCCEDED"], clientName)
                     client.send({"command": "DID_OK"})
                     
                 elif (command == "GET_STATUS"):
@@ -188,11 +196,11 @@ class ServerHandler(SocketServer.BaseRequestHandler):
                     print (excType, fileName, excTb.tb_lineno)
                 running = False
                 
-    def threadedFilterWrapper(self, filter, resourceID, responseCode, annotation, outputList):
-        data = filter.apply(resourceID, responseCode, annotation, None)
+    def threadedFilterWrapper(self, filter, resourceID, resourceInfo, outputList):
+        data = filter.apply(resourceID, resourceInfo, None)
         outputList.append({"filter": filter.getName(), "order": None, "data": data})
                 
-    def applyFilters(self, resourceID, responseCode, annotation):
+    def applyFilters(self, resourceID, resourceInfo):
         parallelFilters = self.parallelFilters
         sequentialFilters = self.sequentialFilters
         filters = []
@@ -200,14 +208,14 @@ class ServerHandler(SocketServer.BaseRequestHandler):
         # Start threaded filters
         filterThreads = []
         for filter in parallelFilters:
-            t = threading.Thread(target=self.threadedFilterWrapper, args=(filter, resourceID, responseCode, annotation, filters))
+            t = threading.Thread(target=self.threadedFilterWrapper, args=(filter, resourceID, resourceInfo, filters))
             filterThreads.append(t)
             t.start()
         
         # Execute sequential filters
         data = {}
         for filter in sequentialFilters:
-            data = filter.apply(resourceID, responseCode, annotation, data.copy())
+            data = filter.apply(resourceID, resourceInfo, data.copy())
             filters.append({"name": filter.getName(), "order": sequentialFilters.index(filter), "data": data})
             
         # Wait for threaded filters to finish

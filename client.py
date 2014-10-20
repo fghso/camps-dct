@@ -55,7 +55,7 @@ while (True):
             crawlerResponse = crawlerObject.crawl(resourceID, config["client"]["logging"], filters)
             
             # Tell server that the collection of the resource has been finished
-            server.send({"command": "DONE_ID", "clientid": clientID, "resourceid": resourceID, "responsecode": crawlerResponse[0], "annotation": crawlerResponse[1]})
+            server.send({"command": "DONE_ID", "clientid": clientID, "resourceid": resourceID, "resourceinfo": crawlerResponse})
 
         elif (command == "DID_OK"):
             # Get a new resource ID
