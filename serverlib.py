@@ -36,12 +36,14 @@ class ServerHandler(SocketServer.BaseRequestHandler):
         # Get filters instances
         self.parallelFilters = [FilterClass(filterName) for (FilterClass, filterName) in self.server.ParallelFiltersClasses]
         self.sequentialFilters = [FilterClass(filterName) for (FilterClass, filterName) in self.server.SequentialFiltersClasses]
+        # Get persistence instance
+        self.persist = self.server.PersistenceHandlerClass(self.server.config["persistence"])
 
     def handle(self):
         # Define some local variables
         config = self.server.config
         client = common.NetworkHandler(self.request)
-        persist = self.server.PersistenceHandlerClass(config["persistence"])
+        persist = self.persist
         status = persist.statusCodes
     
         # Start to handle
@@ -122,6 +124,13 @@ class ServerHandler(SocketServer.BaseRequestHandler):
                     persist.updateResource(clientResourceID, clientResourceInfo, status["SUCCEDED"], clientName)
                     client.send({"command": "DID_OK"})
                     
+                elif (command == "STORE_IDS"):
+                    clientName = clientsInfo[clientID][0]
+                    clientResourcesList = message["resourceslist"]
+                    for resource in clientResourcesList:
+                        persist.insertResource(resource[0], resource[1], clientName)
+                    client.send({"command": "STORE_OK"})
+                    
                 elif (command == "GET_STATUS"):
                     status = "\n" + (" Status (%s:%s/%s) " % (config["global"]["connection"]["address"], config["global"]["connection"]["port"], os.getpid())).center(50, ':') + "\n\n"
                     if (clientsInfo): 
@@ -159,7 +168,8 @@ class ServerHandler(SocketServer.BaseRequestHandler):
                         else:
                             clientName = clientsInfo[ID][0]
                             clientResourceID = clientsInfo[ID][3]
-                            persist.updateResource(clientResourceID, status["AVAILABLE"], None, None, clientName)
+                            persist.updateResource(clientResourceID, None, status["AVAILABLE"], clientName)
+                            del clientsInfo[ID]
                             if (config["server"]["logging"]): logging.info("Client %d removed." % ID)
                             if (config["server"]["verbose"]): print "Client %d removed." % ID
                         del clientsThreads[ID]
@@ -179,8 +189,9 @@ class ServerHandler(SocketServer.BaseRequestHandler):
                         else:
                             clientName = clientsInfo[ID][0]
                             clientResourceID = clientsInfo[ID][3]
-                            persist.updateResource(clientResourceID, status["AVAILABLE"], None, None, clientName)
-                    while (threading.active_count() > 2): pass
+                            persist.updateResource(clientResourceID, None, status["AVAILABLE"], clientName)
+                            del clientsInfo[ID]
+                    while (clientsInfo): pass
                     self.server.shutdown()    
                     client.send({"command": "SD_OK"})
                     if (config["server"]["logging"]): logging.info("Server manually shut down.")
@@ -195,6 +206,9 @@ class ServerHandler(SocketServer.BaseRequestHandler):
                     fileName = os.path.split(excTb.tb_frame.f_code.co_filename)[1]
                     print (excType, fileName, excTb.tb_lineno)
                 running = False
+    
+    def finish(self):
+        self.persist.close()
                 
     def threadedFilterWrapper(self, filter, resourceID, resourceInfo, outputList):
         data = filter.apply(resourceID, resourceInfo, None)
@@ -246,7 +260,5 @@ class ThreadedTCPServer(SocketServer.ThreadingMixIn, SocketServer.TCPServer):
         self.serve_forever()
         
     def addFilter(self, FilterClass, filterName="", parallel=False):        
-        if (parallel):
-            self.ParallelFiltersClasses.append((FilterClass, filterName))
-        else:
-            self.SequentialFiltersClasses.append((FilterClass, filterName))
+        if (parallel): self.ParallelFiltersClasses.append((FilterClass, filterName))
+        else: self.SequentialFiltersClasses.append((FilterClass, filterName))

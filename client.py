@@ -42,9 +42,13 @@ if (config["client"]["logging"]):
 if (config["client"]["verbose"]): print "Connected to server with ID %s " % clientID
 
 # Execute collection
-server.send({"command": "GET_ID", "clientid": clientID})
+getNewID = True
 while (True):
     try:
+        if (getNewID): 
+            server.send({"command": "GET_ID"})
+            getNewID = False
+    
         message = server.recv()
         command = message["command"]
         
@@ -55,11 +59,16 @@ while (True):
             crawlerResponse = crawlerObject.crawl(resourceID, config["client"]["logging"], filters)
             
             # Tell server that the collection of the resource has been finished
-            server.send({"command": "DONE_ID", "clientid": clientID, "resourceid": resourceID, "resourceinfo": crawlerResponse})
-
+            server.send({"command": "DONE_ID", "resourceid": resourceID, "resourceinfo": crawlerResponse[0]})
+            
         elif (command == "DID_OK"):
-            # Get a new resource ID
-            server.send({"command": "GET_ID", "clientid": clientID})
+            # If feedback is enabled and crawler returns new resources to be stored, send them to server
+            if (config["global"]["feedback"] and crawlerResponse[1]):
+                server.send({"command": "STORE_IDS", "resourceslist": crawlerResponse[1]})
+            else: getNewID = True
+                
+        elif (command == "STORE_OK"):
+            getNewID = True
             
         elif (command == "FINISH"):
             if (config["client"]["logging"]): logging.info("Task done, client finished.")
