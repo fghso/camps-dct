@@ -1,8 +1,9 @@
 # -*- coding: iso-8859-1 -*-
 
-import mysql.connector
+import logging
 import threading
 import Queue
+import mysql.connector
 
 
 class BasePersistenceHandler():  
@@ -11,7 +12,8 @@ class BasePersistenceHandler():
                    "SUCCEDED":   2, 
                    "FAILED":    -2}
 
-    def selectResource(self): return ("resourceID", {})
+    def __init__(self, configurationDictionary): pass # all configurations in the XML are passed to the persistence class
+    def selectResource(self): return (None, None) # (resource id, resource info dictionary)
     def updateResource(self, resourceID, resourceInfo, status, crawler): pass
     def insertResource(self, resourceID, resourceInfo, crawler): pass
     def totalResourcesCount(self): return 0
@@ -27,15 +29,14 @@ class MySQLPersistenceHandler(BasePersistenceHandler):
     insertQueue = Queue.Queue()
 
     def __init__(self, configurationDictionary):
-        self.selectConfig = configurationDictionary["mysql"]["select"]
-        self.insertConfig = configurationDictionary["mysql"]["insert"]
+        self.selectConfig = configurationDictionary["persistence"]["mysql"]["select"]
+        self.insertConfig = configurationDictionary["persistence"]["mysql"]["insert"]
         self.mysqlConnection = mysql.connector.connect(user=self.selectConfig["user"], password=self.selectConfig["password"], host=self.selectConfig["host"], database=self.selectConfig["name"])
-        with self.startInsertThreadLock:
-            print self.insertThread
-            if (not self.insertThread):
-                self.insertThread = threading.Thread(target = self._doInsert)
-                self.insertThread.daemon = True
-                self.insertThread.start()
+        with MySQLPersistenceHandler.startInsertThreadLock:
+            if ((not MySQLPersistenceHandler.insertThread) and configurationDictionary["global"]["feedback"]):
+                MySQLPersistenceHandler.insertThread = threading.Thread(target = self._doInsert)
+                MySQLPersistenceHandler.insertThread.daemon = True
+                MySQLPersistenceHandler.insertThread.start()
         
     def selectResource(self):
         query = "SELECT resource_id, response_code, annotation FROM " + self.selectConfig["table"] + " WHERE status = %s ORDER BY resources_pk LIMIT 1"
@@ -56,16 +57,21 @@ class MySQLPersistenceHandler(BasePersistenceHandler):
         cursor.close()
         
     def insertResource(self, resourceID, resourceInfo, crawler): 
-        self.insertQueue.put((resourceID, resourceInfo, crawler))
+        MySQLPersistenceHandler.insertQueue.put((resourceID, resourceInfo, crawler))
     
     def _doInsert(self):    
         insertConnection = mysql.connector.connect(user=self.selectConfig["user"], password=self.selectConfig["password"], host=self.selectConfig["host"], database=self.selectConfig["name"])
         cursor = insertConnection.cursor()
+        query = "INSERT INTO " + self.selectConfig["table"] + " (resource_id, response_code, annotation, crawler) VALUES (%s, %s, %s, %s)"
+        if (self.insertConfig["overwrite"]):
+            query += " ON DUPLICATE KEY UPDATE response_code = VALUES(response_code), annotation = VALUES(annotation), crawler = VALUES(crawler)"
         while (True):
-            (resourceID, resourceInfo, crawler) = self.insertQueue.get()
-            query = "INSERT INTO " + self.selectConfig["table"] + " (resource_id, response_code, annotation, crawler) VALUES (%s, %s, %s, %s)"
-            cursor.execute(query, (resourceID, resourceInfo["responsecode"], resourceInfo["annotation"], crawler))
-            insertConnection.commit()
+            (resourceID, resourceInfo, crawler) = MySQLPersistenceHandler.insertQueue.get()
+            try: 
+                cursor.execute(query, (resourceID, resourceInfo["responsecode"], resourceInfo["annotation"], crawler))
+                insertConnection.commit()
+            except: 
+                logging.exception("Exception while inserting the new resource '%s' sent by crawler '%s'." % (resourceID, crawler))
         
     def totalResourcesCount(self):
         query = "SELECT count(resource_id) FROM " + self.selectConfig["table"]

@@ -67,7 +67,7 @@ def loadConfig(configFilePath):
     config["global"]["connection"]["port"] = int(config["global"]["connection"]["port"])
 
     # Global, server and client default values
-    if ("autofeed" not in config["global"]): config["global"]["autofeed"] = False
+    if ("feedback" not in config["global"]): config["global"]["feedback"] = False
     else: config["global"]["feedback"] = str2bool(config["global"]["feedback"])
     
     if ("loopforever" not in config["server"]): config["server"]["loopforever"] = False
@@ -104,6 +104,9 @@ def loadConfig(configFilePath):
     
     if ("table" not in config["persistence"]["mysql"]["insert"]):
         config["persistence"]["mysql"]["insert"]["table"] = config["persistence"]["mysql"]["select"]["table"]
+        
+    if ("overwrite" not in config["persistence"]["mysql"]["insert"]): config["persistence"]["mysql"]["insert"]["overwrite"] = False
+    else: config["persistence"]["mysql"]["insert"]["overwrite"] = str2bool(config["persistence"]["mysql"]["insert"]["overwrite"])    
         
     return config
     

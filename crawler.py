@@ -31,6 +31,7 @@ class Crawler:
         print "Awaked!"
         
         newResources = []
-        newResources.append((resourceID + 10, {"responsecode": 3, "annotation": "NEW"}))
+        newResources.append((resourceID + 4, {"responsecode": 5, "annotation": "NEW"}))
+        newResources.append((resourceID + 6, {"responsecode": 5, "annotation": "NEW"}))
         
-        return ({"responsecode": 1, "annotation": "OK"}, newResources)
+        return ({"responsecode": 3, "annotation": "OK"}, newResources)

@@ -37,7 +37,7 @@ class ServerHandler(SocketServer.BaseRequestHandler):
         self.parallelFilters = [FilterClass(filterName) for (FilterClass, filterName) in self.server.ParallelFiltersClasses]
         self.sequentialFilters = [FilterClass(filterName) for (FilterClass, filterName) in self.server.SequentialFiltersClasses]
         # Get persistence instance
-        self.persist = self.server.PersistenceHandlerClass(self.server.config["persistence"])
+        self.persist = self.server.PersistenceHandlerClass(self.server.config)
 
     def handle(self):
         # Define some local variables
@@ -103,6 +103,7 @@ class ServerHandler(SocketServer.BaseRequestHandler):
                                 else:
                                     client.send({"command": "FINISH"})
                                     del clientsInfo[clientID]
+                                    del clientsThreads[clientID]
                                     running = False
                                     # If there isn't any more clients to finish, finish server
                                     if (not clientsInfo):
