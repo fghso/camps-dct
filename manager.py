@@ -12,7 +12,7 @@ parser = argparse.ArgumentParser(add_help=False, description="Send action comman
 parser.add_argument("configFilePath")
 parser.add_argument("-h", "--help", action="help", help="show this help message and exit")
 parser.add_argument("-e", "--extended", action="store_true", help="show extended status information")
-parser.add_argument("-r", "--remove", metavar="clientID", help="remove the client specified by the given ID from the server's list")
+parser.add_argument("-r", "--remove", metavar="clientID", nargs="+", help="remove clients from the server's list. Multiple client IDs can be given, separated by commas or spaces. To remove all disconnected clients, write '+' as the ID")
 parser.add_argument("--shutdown", action="store_true", help="remove all clients from the server's list and shutdown server")
 args = parser.parse_args()
 
@@ -28,15 +28,23 @@ except:
 
 # Remove client
 if (args.remove):
-    server.send({"command": "RM_CLIENT", "clientid": args.remove})
+    server.send({"command": "RM_CLIENTS", "clientidlist": args.remove})
     message = server.recv()
     server.close()
     
     command = message["command"]
-    if (command == "RM_OK"):
-        print "Client %s successfully removed." % args.remove
-    elif (command == "RM_ERROR"):
-        print "ERROR: %s." % message["reason"] 
+    if (command == "RM_RETURN"):
+        removeSuccess = message["successlist"]
+        removeError = message["errorlist"]
+        if (not removeSuccess) and (not removeError): print "No disconnected client found to remove."
+        if (len(removeSuccess) > 1): 
+            print "Clients %s successfully removed." % " and ".join((", ".join(removeSuccess[:-1]), removeSuccess[-1]))
+        elif (removeSuccess): 
+            print "Client %s successfully removed." % removeSuccess[0]
+        if (len(removeError) > 1): 
+            print "ERROR: IDs %s do not exist." % " and ".join((", ".join(removeError[:-1]), removeError[-1]))
+        elif (removeError): 
+            print "ERROR: ID %s does not exist." % removeError[0]
     
 # Shut down server
 elif (args.shutdown):   

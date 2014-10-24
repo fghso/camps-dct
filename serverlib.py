@@ -55,8 +55,8 @@ class ServerHandler(SocketServer.BaseRequestHandler):
                 
                 # Stop thread execution if the client has closed the connection
                 if (not message): 
-                    if (config["server"]["logging"]): logging.info("Connection to client %d closed." % clientID)
-                    if (config["server"]["verbose"]): print "Connection to client %d closed." % clientID
+                    if (config["server"]["logging"]): logging.info("Client %d disconnected." % clientID)
+                    if (config["server"]["verbose"]): print "Client %d disconnected." % clientID
                     running = False
                     continue
 
@@ -157,26 +157,40 @@ class ServerHandler(SocketServer.BaseRequestHandler):
                     client.send({"command": "GIVE_STATUS", "status": status})
                     running = False
                     
-                elif (command == "RM_CLIENT"):
-                    ID = int(message["clientid"])
-                    if (ID in clientsThreads):
-                        # If the thread is alive, set the associated interrupt event and wait for the thread to safely stop
-                        if (clientsThreads[ID][0].is_alive()):
-                            clientsThreads[ID][1].set()
-                            while (clientsThreads[ID][0].is_alive()): pass
-                        # If the thread isn't alive, mark the last ID requested by the client as not collected, 
-                        # so that it can be requested again by any other client, ensuring collection consistency
+                elif (command == "RM_CLIENTS"):
+                    clientIDList = []
+                    # Pick all disconnected clients to remove them
+                    if (message["clientidlist"][0] == "+"):
+                        for ID in clientsThreads.keys():
+                            if (not clientsThreads[ID][0].is_alive()): clientIDList.append(ID)
+                    # Get client IDs specified by the user 
+                    else: clientIDList = [int(ID) for ID in message["clientidlist"]]
+                    # Do remove
+                    removeSuccess = []
+                    removeError = []
+                    for ID in clientIDList:
+                        if (ID in clientsThreads):
+                            # If the thread is alive, set the associated interrupt event 
+                            if (clientsThreads[ID][0].is_alive()):
+                                clientsThreads[ID][1].set()
+                            # If the thread isn't alive, mark the last ID requested by the client as not collected 
+                            # so that it can be requested again by any other client, ensuring collection consistency
+                            else:
+                                clientName = clientsInfo[ID][0]
+                                clientResourceID = clientsInfo[ID][3]
+                                persist.updateResource(clientResourceID, None, status["AVAILABLE"], clientName)
+                                del clientsInfo[ID]
+                                if (config["server"]["logging"]): logging.info("Client %d removed." % ID)
+                                if (config["server"]["verbose"]): print "Client %d removed." % ID
+                            removeSuccess.append(ID)
                         else:
-                            clientName = clientsInfo[ID][0]
-                            clientResourceID = clientsInfo[ID][3]
-                            persist.updateResource(clientResourceID, None, status["AVAILABLE"], clientName)
-                            del clientsInfo[ID]
-                            if (config["server"]["logging"]): logging.info("Client %d removed." % ID)
-                            if (config["server"]["verbose"]): print "Client %d removed." % ID
-                        del clientsThreads[ID]
-                        client.send({"command": "RM_OK"})
-                    else:
-                        client.send({"command": "RM_ERROR", "reason": "ID does not exist."})
+                            removeError.append(ID)
+                    # Wait for alive threads to safely terminate
+                    if (removeSuccess): 
+                        while any(ID in clientsInfo for ID in removeSuccess): pass
+                        for ID in removeSuccess: del clientsThreads[ID]
+                    # Send response to manager
+                    client.send({"command": "RM_RETURN", "successlist": [str(ID) for ID in removeSuccess], "errorlist": [str(ID) for ID in removeError]})
                     running = False
                         
                 elif (command == "SHUTDOWN"):
@@ -210,7 +224,7 @@ class ServerHandler(SocketServer.BaseRequestHandler):
     
     def finish(self):
         self.persist.close()
-                
+        
     def threadedFilterWrapper(self, filter, resourceID, resourceInfo, outputList):
         data = filter.apply(resourceID, resourceInfo, None)
         outputList.append({"filter": filter.getName(), "order": None, "data": data})
