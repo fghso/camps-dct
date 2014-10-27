@@ -25,13 +25,13 @@ class Crawler:
         print "Resource received: %s" % resourceID        
         print "Filters: %s" % filters
         
-        sleepTime = 30
+        sleepTime = 10
         print "Sleeping for %d seconds..." % sleepTime
         time.sleep(sleepTime)
-        print "Awaked!"
+        print "Awaked!\n"
         
         newResources = []
-        newResources.append((resourceID + 4, {"responsecode": 5, "annotation": "NEW"}))
-        newResources.append((resourceID + 6, {"responsecode": 5, "annotation": "NEW"}))
+        newResources.append((resourceID + 1, {"response_code": 5, "annotation": "NEW"}))
+        newResources.append((resourceID + 2, {"response_code": 5, "annotation": "NEW"}))
         
-        return ({"responsecode": 3, "annotation": "OK"}, newResources)
+        return ({"response_code": 6, "annotation": "OK"}, newResources)

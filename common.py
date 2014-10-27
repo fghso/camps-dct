@@ -66,10 +66,15 @@ def loadConfig(configFilePath):
     # Type conversions
     config["global"]["connection"]["port"] = int(config["global"]["connection"]["port"])
 
-    # Global, server and client default values
-    if ("feedback" not in config["global"]): config["global"]["feedback"] = False
-    else: config["global"]["feedback"] = str2bool(config["global"]["feedback"])
+    # Global default values
+    if ("feedback" not in config["global"]): config["global"]["feedback"] = {"enable": False}
     
+    if ("overwrite" not in config["global"]["feedback"]): config["global"]["feedback"]["overwrite"] = False
+    else: config["global"]["feedback"]["overwrite"] = str2bool(config["global"]["feedback"]["overwrite"])    
+    
+    # Server default values
+    if ("server" not in config): config["server"] = {}
+
     if ("loopforever" not in config["server"]): config["server"]["loopforever"] = False
     else: config["server"]["loopforever"] = str2bool(config["server"]["loopforever"])
     
@@ -79,34 +84,14 @@ def loadConfig(configFilePath):
     if ("verbose" not in config["server"]): config["server"]["verbose"] = False
     else: config["server"]["verbose"] = str2bool(config["server"]["verbose"])
             
+    # Client default values
+    if ("client" not in config): config["client"] = {}
+    
     if ("logging" not in config["client"]): config["client"]["logging"] = True
     else: config["client"]["logging"] = str2bool(config["client"]["logging"])
     
     if ("verbose" not in config["client"]): config["client"]["verbose"] = False
     else: config["client"]["verbose"] = str2bool(config["client"]["verbose"])
-        
-    # MySQLPersistenceHandler default values
-    if ("insert" not in config["persistence"]["mysql"]):
-        config["persistence"]["mysql"]["insert"] = config["persistence"]["mysql"]["select"]
-        return
-
-    if ("user" not in config["persistence"]["mysql"]["insert"]):
-        config["persistence"]["mysql"]["insert"]["user"] = config["persistence"]["mysql"]["select"]["user"]
-        
-    if ("password" not in config["persistence"]["mysql"]["insert"]):
-        config["persistence"]["mysql"]["insert"]["password"] = config["persistence"]["mysql"]["select"]["password"]
     
-    if ("host" not in config["persistence"]["mysql"]["insert"]):
-        config["persistence"]["mysql"]["insert"]["host"] = config["persistence"]["mysql"]["select"]["host"]
-    
-    if ("name" not in config["persistence"]["mysql"]["insert"]):
-        config["persistence"]["mysql"]["insert"]["name"] = config["persistence"]["mysql"]["select"]["name"]
-    
-    if ("table" not in config["persistence"]["mysql"]["insert"]):
-        config["persistence"]["mysql"]["insert"]["table"] = config["persistence"]["mysql"]["select"]["table"]
-        
-    if ("overwrite" not in config["persistence"]["mysql"]["insert"]): config["persistence"]["mysql"]["insert"]["overwrite"] = False
-    else: config["persistence"]["mysql"]["insert"]["overwrite"] = str2bool(config["persistence"]["mysql"]["insert"]["overwrite"])    
-        
     return config
     

@@ -86,7 +86,7 @@ class ServerHandler(SocketServer.BaseRequestHandler):
                             clientName = clientsInfo[clientID][0]
                             with getIDLock:
                                 (resourceID, resourceInfo) = persist.selectResource()
-                                if (resourceID): persist.updateResource(resourceID, None, status["INPROGRESS"], clientName)
+                                if (resourceID): persist.updateResource(resourceID, None, status["COLLECTING"], clientName)
                             # If there is a resource available, send ID to client
                             if (resourceID):
                                 clientsInfo[clientID][3] = resourceID
@@ -120,17 +120,16 @@ class ServerHandler(SocketServer.BaseRequestHandler):
                     
                 elif (command == "DONE_ID"):
                     clientName = clientsInfo[clientID][0]
-                    clientResourceID = message["resourceid"]
+                    clientResourceID = clientsInfo[clientID][3]
                     clientResourceInfo = message["resourceinfo"]
-                    persist.updateResource(clientResourceID, clientResourceInfo, status["SUCCEDED"], clientName)
+                    clientNewResources = message["newresources"]
+                    if (config["global"]["feedback"]["enable"] and clientNewResources):
+                        persist.updateResource(clientResourceID, clientResourceInfo, status["INSERTING"], clientName)
+                        for resource in clientNewResources:
+                            persist.insertResource(clientResourceID, resource[0], resource[1], clientName)
+                    else:
+                        persist.updateResource(clientResourceID, clientResourceInfo, status["SUCCEDED"], clientName)
                     client.send({"command": "DID_OK"})
-                    
-                elif (command == "STORE_IDS"):
-                    clientName = clientsInfo[clientID][0]
-                    clientResourcesList = message["resourceslist"]
-                    for resource in clientResourcesList:
-                        persist.insertResource(resource[0], resource[1], clientName)
-                    client.send({"command": "STORE_OK"})
                     
                 elif (command == "GET_STATUS"):
                     status = "\n" + (" Status (%s:%s/%s) " % (config["global"]["connection"]["address"], config["global"]["connection"]["port"], os.getpid())).center(50, ':') + "\n\n"
