@@ -56,12 +56,17 @@ while (True):
             
             # Tell server that the collection of the resource has been finished. 
             # If feedback is enabled, also send the new resources to server
-            if (config["global"]["feedback"]["enable"]):
+            if (config["global"]["feedback"]):
                 server.send({"command": "DONE_ID", "resourceinfo": crawlerResponse[0], "newresources": crawlerResponse[1]})
             else: 
                 server.send({"command": "DONE_ID", "resourceinfo": crawlerResponse[0]})
             
-        elif (command == "DID_OK"):
+        elif (command == "DONE_RET"):
+            insertErrors = message["inserterrors"]
+            if (len(insertErrors) > 1): 
+                logging.error("Failed to insert the new resources %s after collect resource %s." % (" and ".join((", ".join(insertErrors[:-1]), insertErrors[-1])), resourceID))
+            elif (insertErrors): 
+                logging.error("Failed to insert the new resource %s after collect resource %s." % (insertErrors[0], resourceID))
             server.send({"command": "GET_ID"})
                 
         elif (command == "FINISH"):

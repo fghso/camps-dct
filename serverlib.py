@@ -55,8 +55,11 @@ class ServerHandler(SocketServer.BaseRequestHandler):
                 
                 # Stop thread execution if the client has closed the connection
                 if (not message): 
+                    clientName = clientsInfo[clientID][0]
+                    clientResourceID = clientsInfo[clientID][3]
                     if (config["server"]["logging"]): logging.info("Client %d disconnected." % clientID)
                     if (config["server"]["verbose"]): print "Client %d disconnected." % clientID
+                    persist.updateResource(clientResourceID, None, status["FAILED"], clientName)
                     running = False
                     continue
 
@@ -86,7 +89,7 @@ class ServerHandler(SocketServer.BaseRequestHandler):
                             clientName = clientsInfo[clientID][0]
                             with getIDLock:
                                 (resourceID, resourceInfo) = persist.selectResource()
-                                if (resourceID): persist.updateResource(resourceID, None, status["COLLECTING"], clientName)
+                                if (resourceID): persist.updateResource(resourceID, None, status["INPROGRESS"], clientName)
                             # If there is a resource available, send ID to client
                             if (resourceID):
                                 clientsInfo[clientID][3] = resourceID
@@ -123,13 +126,16 @@ class ServerHandler(SocketServer.BaseRequestHandler):
                     clientResourceID = clientsInfo[clientID][3]
                     clientResourceInfo = message["resourceinfo"]
                     clientNewResources = message["newresources"]
-                    if (config["global"]["feedback"]["enable"] and clientNewResources):
-                        persist.updateResource(clientResourceID, clientResourceInfo, status["INSERTING"], clientName)
+                    if (config["global"]["feedback"] and clientNewResources):
+                        insertErrors = []
                         for resource in clientNewResources:
-                            persist.insertResource(clientResourceID, resource[0], resource[1], clientName)
-                    else:
+                            if (not persist.insertResource(resource[0], resource[1], clientName)):
+                                insertErrors.append(str(resource[0]))
+                    if insertErrors: 
+                        persist.updateResource(clientResourceID, clientResourceInfo, status["FAILED"], clientName)
+                    else: 
                         persist.updateResource(clientResourceID, clientResourceInfo, status["SUCCEDED"], clientName)
-                    client.send({"command": "DID_OK"})
+                    client.send({"command": "DONE_RET", "inserterrors": insertErrors})
                     
                 elif (command == "GET_STATUS"):
                     status = "\n" + (" Status (%s:%s/%s) " % (config["global"]["connection"]["address"], config["global"]["connection"]["port"], os.getpid())).center(50, ':') + "\n\n"
@@ -150,7 +156,7 @@ class ServerHandler(SocketServer.BaseRequestHandler):
                     else:
                         status += "  No client connected right now.\n"
                     resourcesTotal = float(persist.totalResourcesCount())
-                    resourcesCollected = float(persist.resourcesCollectedCount())
+                    resourcesCollected = float(persist.resourcesSuccededCount() + persist.resourcesFailedCount())
                     collectedResourcesPercent = (resourcesCollected / resourcesTotal) * 100
                     status += "\n" + (" Status (%.1f%% collected) " % (collectedResourcesPercent)).center(50, ':') + "\n"
                     client.send({"command": "GIVE_STATUS", "status": status})

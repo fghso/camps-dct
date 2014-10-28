@@ -2,44 +2,35 @@
 
 import logging
 import threading
-import Queue
 import mysql.connector
+from mysql.connector.errors import Error
+from mysql.connector import errorcode
 
-import time
+
 class BasePersistenceHandler():  
     statusCodes = {"AVAILABLE":  0, 
-                   "COLLECTING": 1, 
-                   "INSERTING":  3, 
-                   "SUCCEDED":   4, 
+                   "INPROGRESS": 1, 
+                   "SUCCEDED":   2, 
                    "FAILED":    -1}
 
     def __init__(self, configurationDictionary): pass # all configurations in the XML are passed to the persistence class
-    def selectResource(self): return (None, None) # (resource id, resource info dictionary)
+    def selectResource(self): return (None, None) # return (resource id, resource info dictionary)
     def updateResource(self, resourceID, resourceInfo, status, crawler): pass
-    def insertResource(self, fromResourceID, newResourceID, newResourceInfo, crawler): pass
+    def insertResource(self, resourceID, resourceInfo, crawler): return True # return True or False
     def totalResourcesCount(self): return 0
-    def resourcesCollectedCount(self): return 0
+    def resourcesAvailableCount(self): return 0
+    def resourcesInProgressCount(self): return 0
     def resourcesSucceededCount(self): return 0
     def resourcesFailedCount(self): return 0
     def close(self): pass
         
 
 class MySQLPersistenceHandler(BasePersistenceHandler):
-    insertThread = None
-    startInsertThreadLock = threading.Lock()
-    insertQueue = Queue.Queue()
-
     def __init__(self, configurationDictionary):
         self._extractConfig(configurationDictionary)
         self.mysqlConnection = mysql.connector.connect(user=self.selectConfig["user"], password=self.selectConfig["password"], host=self.selectConfig["host"], database=self.selectConfig["name"])
-        with MySQLPersistenceHandler.startInsertThreadLock:
-            if ((not MySQLPersistenceHandler.insertThread) and configurationDictionary["global"]["feedback"]):
-                MySQLPersistenceHandler.insertThread = threading.Thread(target = self._doInsert)
-                MySQLPersistenceHandler.insertThread.daemon = True
-                MySQLPersistenceHandler.insertThread.start()
                 
     def _extractConfig(self, configurationDictionary):
-        self.feedbackConfig = configurationDictionary["global"]["feedback"]
         self.selectConfig = configurationDictionary["persistence"]["mysql"]["select"]
     
         # Set default values
@@ -76,39 +67,23 @@ class MySQLPersistenceHandler(BasePersistenceHandler):
         self.mysqlConnection.commit()
         cursor.close()
         
-    def insertResource(self, fromResourceID, newResourceID, newResourceInfo, crawler):
-        # Interrupt execution if insertion thread is not alive
-        if (not MySQLPersistenceHandler.insertThread.is_alive()): 
-            logging.error("Insertion thread is not alive.")
-            persist.updateResource(fromResourceID, None, status["FAILED"], crawler)
-            raise RuntimeError("Insertion thread is not alive.")
-        MySQLPersistenceHandler.insertQueue.put((fromResourceID, newResourceID, newResourceInfo, crawler))
-    
-    def _doInsert(self):    
-        insertConnection = mysql.connector.connect(user=self.insertConfig["user"], password=self.insertConfig["password"], host=self.insertConfig["host"], database=self.insertConfig["name"])
-        cursor = insertConnection.cursor()
-        while (True):
-            (fromResourceID, newResourceID, newResourceInfo, crawler) = MySQLPersistenceHandler.insertQueue.get()
-            try: 
-                time.sleep(5)
-                if not newResourceInfo:
-                    query = "INSERT INTO " + self.insertConfig["table"] + " (resource_id, crawler) VALUES (%s, %s)"
-                    if (self.feedbackConfig["overwrite"]): query += " ON DUPLICATE KEY UPDATE crawler = VALUES(crawler)"
-                    cursor.execute(query, (newResourceID, crawler))
-                    insertConnection.commit()
-                else:
-                    query = "INSERT INTO " + self.insertConfig["table"] + " (" + ", ".join(["resource_id", "crawler"] + newResourceInfo.keys()) + ") VALUES (" + ", ".join(["%s", "%s"] + ["%s"] * len(newResourceInfo)) + ")"
-                    if (self.feedbackConfig["overwrite"]):
-                        query += " ON DUPLICATE KEY UPDATE crawler = VALUES(crawler), " + ", ".join(["{0} = VALUES({0})".format(key) for key in newResourceInfo.keys()])
-                    cursor.execute(query, (newResourceID, crawler) + tuple(newResourceInfo.values()))
-                    insertConnection.commit()
-            except:
-                # In case of error, mark the resource from wich the new resources came from as failed
-                logging.exception("Exception while inserting the new resource '%s' sent by crawler '%s' as a result of crawling the resource '%s'." % (newResourceID, crawler,fromResourceID))
-                self.updateResource(fromResourceID, None, self.statusCodes["FAILED"], crawler)
+    def insertResource(self, resourceID, resourceInfo, crawler):
+        cursor = self.mysqlConnection.cursor()
+        try: 
+            if not resourceInfo:
+                query = "INSERT INTO " + self.insertConfig["table"] + " (resource_id, crawler) VALUES (%s, %s)"
+                cursor.execute(query, (resourceID, crawler))
+                self.mysqlConnection.commit()
             else:
-                # If everything is right, mark the resource as succeded
-                self.updateResource(fromResourceID, None, self.statusCodes["SUCCEDED"], crawler)
+                query = "INSERT INTO " + self.insertConfig["table"] + " (" + ", ".join(["resource_id", "crawler"] + resourceInfo.keys()) + ") VALUES (" + ", ".join(["%s", "%s"] + ["%s"] * len(resourceInfo)) + ")"
+                cursor.execute(query, (resourceID, crawler) + tuple(resourceInfo.values()))
+                self.mysqlConnection.commit()
+        except mysql.connector.Error as err:
+            if err.errno != errorcode.ER_DUP_ENTRY:
+                logging.exception("Exception while inserting the new resource %s sent by crawler '%s'." % (resourceID, crawler))
+                return False
+            else: return True
+        else: return True
         
     def totalResourcesCount(self):
         cursor = self.mysqlConnection.cursor()
@@ -118,10 +93,18 @@ class MySQLPersistenceHandler(BasePersistenceHandler):
         cursor.close()
         return count
         
-    def resourcesCollectedCount(self):
+    def resourcesAvailableCount(self):
         cursor = self.mysqlConnection.cursor()
-        query = "SELECT count(resource_id) FROM " + self.selectConfig["table"] + " WHERE status = %s OR status = %s"
-        cursor.execute(query, (self.statusCodes["SUCCEDED"], self.statusCodes["FAILED"]))
+        query = "SELECT count(resource_id) FROM " + self.selectConfig["table"] + " WHERE status = %s"
+        cursor.execute(query, (self.statusCodes["AVAILABLE"],))
+        count = cursor.fetchone()[0]
+        cursor.close()
+        return count
+        
+    def resourcesInProgressCount(self):
+        cursor = self.mysqlConnection.cursor()
+        query = "SELECT count(resource_id) FROM " + self.selectConfig["table"] + " WHERE status = %s"
+        cursor.execute(query, (self.statusCodes["INPROGRESS"],))
         count = cursor.fetchone()[0]
         cursor.close()
         return count

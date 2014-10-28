@@ -67,10 +67,8 @@ def loadConfig(configFilePath):
     config["global"]["connection"]["port"] = int(config["global"]["connection"]["port"])
 
     # Global default values
-    if ("feedback" not in config["global"]): config["global"]["feedback"] = {"enable": False}
-    
-    if ("overwrite" not in config["global"]["feedback"]): config["global"]["feedback"]["overwrite"] = False
-    else: config["global"]["feedback"]["overwrite"] = str2bool(config["global"]["feedback"]["overwrite"])    
+    if ("feedback" not in config["global"]): config["global"]["feedback"] = False
+    else: config["global"]["feedback"] = str2bool(config["global"]["feedback"])
     
     # Server default values
     if ("server" not in config): config["server"] = {}
