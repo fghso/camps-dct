@@ -13,7 +13,7 @@ class BasePersistenceHandler():
                    "SUCCEDED":   2, 
                    "FAILED":    -1}
 
-    def __init__(self, configurationDictionary): pass # all configurations in the XML are passed to the persistence class
+    def __init__(self, configurationsDictionary): pass # all configurations in the XML are passed to the persistence class
     def selectResource(self): return (None, None) # return (resource id, resource info dictionary)
     def updateResource(self, resourceID, resourceInfo, status, crawler): pass
     def insertResource(self, resourceID, resourceInfo, crawler): return True # return True or False
@@ -26,19 +26,19 @@ class BasePersistenceHandler():
         
 
 class MySQLPersistenceHandler(BasePersistenceHandler):
-    def __init__(self, configurationDictionary):
-        self._extractConfig(configurationDictionary)
+    def __init__(self, configurationsDictionary):
+        self._extractConfig(configurationsDictionary)
         self.mysqlConnection = mysql.connector.connect(user=self.selectConfig["user"], password=self.selectConfig["password"], host=self.selectConfig["host"], database=self.selectConfig["name"])
                 
-    def _extractConfig(self, configurationDictionary):
-        self.selectConfig = configurationDictionary["persistence"]["mysql"]["select"]
+    def _extractConfig(self, configurationsDictionary):
+        self.selectConfig = configurationsDictionary["persistence"]["handler"]["select"]
     
         # Set default values
         if ("resourceinfo" not in self.selectConfig): self.selectConfig["resourceinfo"] = []
         elif (not isinstance(self.selectConfig["resourceinfo"], list)): self.selectConfig["resourceinfo"] = [self.selectConfig["resourceinfo"]]
         
-        if ("insert" not in configurationDictionary["persistence"]["mysql"]): self.insertConfig = self.selectConfig
-        else: self.insertConfig = configurationDictionary["persistence"]["mysql"]["insert"]
+        if ("insert" not in configurationsDictionary["persistence"]["handler"]): self.insertConfig = self.selectConfig
+        else: self.insertConfig = configurationsDictionary["persistence"]["handler"]["insert"]
         
         if ("user" not in self.insertConfig): self.insertConfig["user"] = self.selectConfig["user"]
         if ("password" not in self.insertConfig): self.insertConfig["password"] = self.selectConfig["password"]

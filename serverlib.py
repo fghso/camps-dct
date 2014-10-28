@@ -8,6 +8,8 @@ import logging
 import time
 import SocketServer
 import common
+import persistence
+import filters
 from datetime import datetime
 
 
@@ -57,7 +59,7 @@ class ServerHandler(SocketServer.BaseRequestHandler):
                 if (not message): 
                     clientName = clientsInfo[clientID][0]
                     clientResourceID = clientsInfo[clientID][3]
-                    if (config["server"]["logging"]): logging.info("Client %d disconnected." % clientID)
+                    logging.info("Client %d disconnected." % clientID)
                     if (config["server"]["verbose"]): print "Client %d disconnected." % clientID
                     persist.updateResource(clientResourceID, None, status["FAILED"], clientName)
                     running = False
@@ -76,7 +78,7 @@ class ServerHandler(SocketServer.BaseRequestHandler):
                     clientsInfo[clientID] = [clientName, clientAddress, clientPid, None, 0, datetime.now(), None]
                     clientsThreads[clientID] = (threading.current_thread(), threading.Event())
                     client.send({"command": "GIVE_LOGIN", "clientid": clientID})
-                    if (config["server"]["logging"]): logging.info("New client connected: %d" % clientID)
+                    logging.info("New client connected: %d" % clientID)
                     if (config["server"]["verbose"]): print "New client connected: %d" % clientID
                 
                 elif (command == "GET_ID"):
@@ -111,13 +113,13 @@ class ServerHandler(SocketServer.BaseRequestHandler):
                                     # If there isn't any more clients to finish, finish server
                                     if (not clientsInfo):
                                         self.server.shutdown()
-                                        if (config["server"]["logging"]): logging.info("Task done, server finished.")
+                                        logging.info("Task done, server finished.")
                                         if (config["server"]["verbose"]): print "Task done, server finished."
                         # If the client has been removed, kill it
                         else:
                             client.send({"command": "KILL"})
                             del clientsInfo[clientID]
-                            if (config["server"]["logging"]): logging.info("Client %d removed." % clientID)
+                            logging.info("Client %d removed." % clientID)
                             if (config["server"]["verbose"]): print "Client %d removed." % clientID
                             running = False
                     
@@ -185,7 +187,7 @@ class ServerHandler(SocketServer.BaseRequestHandler):
                                 clientResourceID = clientsInfo[ID][3]
                                 persist.updateResource(clientResourceID, None, status["AVAILABLE"], clientName)
                                 del clientsInfo[ID]
-                                if (config["server"]["logging"]): logging.info("Client %d removed." % ID)
+                                logging.info("Client %d removed." % ID)
                                 if (config["server"]["verbose"]): print "Client %d removed." % ID
                             removeSuccess.append(ID)
                         else:
@@ -201,7 +203,7 @@ class ServerHandler(SocketServer.BaseRequestHandler):
                 elif (command == "SHUTDOWN"):
                     # Interrupt all active clients and mark resources requested by inactive 
                     # clients as not collected. After that, shut down server
-                    if (config["server"]["logging"]): logging.info("Removing all clients to shut down...")
+                    logging.info("Removing all clients to shut down...")
                     if (config["server"]["verbose"]): print "Removing all clients to shut down..."
                     for ID in clientsThreads.keys():
                         if (clientsThreads[ID][0].is_alive()):
@@ -214,12 +216,12 @@ class ServerHandler(SocketServer.BaseRequestHandler):
                     while (clientsInfo): pass
                     self.server.shutdown()    
                     client.send({"command": "SD_OK"})
-                    if (config["server"]["logging"]): logging.info("Server manually shut down.")
+                    logging.info("Server manually shut down.")
                     if (config["server"]["verbose"]): print "Server manually shut down."
                     running = False
             
             except Exception as error:
-                if (config["server"]["logging"]): logging.exception("Exception while processing a request from client %d. Execution of thread '%s' aborted." % (clientID, threading.current_thread().name))
+                logging.exception("Exception while processing a request from client %d. Execution of thread '%s' aborted." % (clientID, threading.current_thread().name))
                 if (config["server"]["verbose"]): 
                     print "ERROR: %s" % str(error)
                     excType, excObj, excTb = sys.exc_info()
@@ -256,29 +258,35 @@ class ServerHandler(SocketServer.BaseRequestHandler):
         for filter in filterThreads:
             filter.join()
         
-        return filters
+        return (filters if filters else None)
                 
                 
 class ThreadedTCPServer(SocketServer.ThreadingMixIn, SocketServer.TCPServer):
-    def __init__(self, configurationsDictionary, PersistenceHandlerClass):
+    def __init__(self, configurationsDictionary):
         self.config = configurationsDictionary
-        self.PersistenceHandlerClass = PersistenceHandlerClass
-        self.ParallelFiltersClasses = []
-        self.SequentialFiltersClasses = []
-        
+
         # Configure logging
         if (self.config["server"]["logging"]):
             logging.basicConfig(format="%(asctime)s %(module)s %(levelname)s: %(message)s", datefmt="%d/%m/%Y %H:%M:%S", 
                                 filename="server[%s%s].log" % (self.config["global"]["connection"]["address"], self.config["global"]["connection"]["port"]), filemode="w", level=logging.DEBUG)
+                                
+        # Add persistence handler
+        self.PersistenceHandlerClass = getattr(persistence, self.config["persistence"]["handler"]["class"])
         
+        # Add filters
+        self.ParallelFiltersClasses = []
+        self.SequentialFiltersClasses = []
+        for filter in self.config["server"]["filter"]:
+            if (filter["enable"]):
+                FilterClass = getattr(filters, filter["class"])
+                filterName = filter["name"]
+                if (filter["parallel"]): self.ParallelFiltersClasses.append((FilterClass, filterName))
+                else: self.SequentialFiltersClasses.append((FilterClass, filterName))
+                
         # Call SocketSever constructor
         SocketServer.TCPServer.__init__(self, (self.config["global"]["connection"]["address"], self.config["global"]["connection"]["port"]), ServerHandler)
     
     def start(self):
-        if (self.config["server"]["logging"]): logging.info("Server ready. Waiting for connections...")
+        logging.info("Server ready. Waiting for connections...")
         if (self.config["server"]["verbose"]): print "Server ready. Waiting for connections..."
         self.serve_forever()
-        
-    def addFilter(self, FilterClass, filterName="", parallel=False):        
-        if (parallel): self.ParallelFiltersClasses.append((FilterClass, filterName))
-        else: self.SequentialFiltersClasses.append((FilterClass, filterName))

@@ -63,8 +63,15 @@ def loadConfig(configFilePath):
     configDict = xmltodict.parse(configFile.read())
     config = configDict["config"]
 
-    # Type conversions
+    # Connection
     config["global"]["connection"]["port"] = int(config["global"]["connection"]["port"])
+
+    # Persistence
+    if (isinstance(config["persistence"]["handler"], list)): 
+        for handler in config["persistence"]["handler"]:
+            if str2bool(handler["enable"]):
+                config["persistence"]["handler"] = handler
+                break
 
     # Global default values
     if ("feedback" not in config["global"]): config["global"]["feedback"] = False
@@ -81,6 +88,15 @@ def loadConfig(configFilePath):
     
     if ("verbose" not in config["server"]): config["server"]["verbose"] = False
     else: config["server"]["verbose"] = str2bool(config["server"]["verbose"])
+    
+    if ("filter" not in config["server"]): config["server"]["filter"] = []
+    elif (not isinstance(config["server"]["filter"], list)): config["server"]["filter"] = [config["server"]["filter"]]
+    
+    for filter in config["server"]["filter"]:
+        filter["enable"] = str2bool(filter["enable"])
+        if ("name" not in filter): filter["name"] = None
+        if ("parallel" not in filter): filter["parallel"] = False
+        else: filter["parallel"] = str2bool(filter["parallel"]) 
             
     # Client default values
     if ("client" not in config): config["client"] = {}

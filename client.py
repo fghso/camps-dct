@@ -7,7 +7,6 @@ import json
 import logging
 import argparse
 import common
-import crawler
 
 
 # Analyse arguments
@@ -17,6 +16,12 @@ parser.add_argument("-h", "--help", action="help", help="show this help message 
 parser.add_argument("-v", "--verbose", type=common.str2bool, metavar="on/off", help="enable/disable log messages on screen")
 parser.add_argument("-g", "--logging", type=common.str2bool, metavar="on/off", help="enable/disable logging on file")
 args = parser.parse_args()
+
+# Add directory of the configuration file to sys.path before import crawler, so that the module can easily 
+# be overrided by placing the modified file in a subfolder, along with the configuration file itself
+configFileDir = os.path.dirname(os.path.abspath(args.configFilePath))
+sys.path = [configFileDir] + sys.path
+import crawler
 
 # Load configurations
 config = common.loadConfig(args.configFilePath)
@@ -38,7 +43,8 @@ clientID = message["clientid"]
 if (config["client"]["logging"]):
     logging.basicConfig(format="%(asctime)s %(module)s %(levelname)s: %(message)s", datefmt="%d/%m/%Y %H:%M:%S", 
                         filename="client%s[%s%s].log" % (clientID, config["global"]["connection"]["address"], config["global"]["connection"]["port"]), filemode="w", level=logging.DEBUG)
-    logging.info("Connected to server with ID %s " % clientID)
+
+logging.info("Connected to server with ID %s " % clientID)
 if (config["client"]["verbose"]): print "Connected to server with ID %s " % clientID
 
 # Execute collection
@@ -52,7 +58,7 @@ while (True):
             # Call crawler with resource ID and parameters received from the server
             resourceID = message["resourceid"]
             filters = message["filters"]
-            crawlerResponse = crawlerObject.crawl(resourceID, config["client"]["logging"], filters)
+            crawlerResponse = crawlerObject.crawl(resourceID, filters)
             
             # Tell server that the collection of the resource has been finished. 
             # If feedback is enabled, also send the new resources to server
@@ -70,17 +76,17 @@ while (True):
             server.send({"command": "GET_ID"})
                 
         elif (command == "FINISH"):
-            if (config["client"]["logging"]): logging.info("Task done, client finished.")
+            logging.info("Task done, client finished.")
             if (config["client"]["verbose"]): print "Task done, client finished."
             break
             
         elif (command == "KILL"):
-            if (config["client"]["logging"]): logging.info("Client removed by the server.")
+            logging.info("Client removed by the server.")
             if (config["client"]["verbose"]): print "Client removed by the server."
             break
             
     except Exception as error:
-        if (config["client"]["logging"]): logging.exception("Exception while processing data. Execution aborted.")
+        logging.exception("Exception while processing data. Execution aborted.")
         if (config["client"]["verbose"]):
             print "ERROR: %s" % str(error)
             excType, excObj, excTb = sys.exc_info()
