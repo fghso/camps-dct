@@ -6,6 +6,7 @@ import os
 import json
 import logging
 import argparse
+import socket
 import common
 
 
@@ -32,10 +33,11 @@ if (args.logging is not None): config["client"]["logging"] = args.logging
 crawlerObject = crawler.Crawler()
 
 # Get client ID
+name = crawlerObject.getName()
 processID = os.getpid()
 server = common.NetworkHandler()
 server.connect(config["global"]["connection"]["address"], config["global"]["connection"]["port"])
-server.send({"command": "GET_LOGIN", "name": crawlerObject.getName(), "processid": processID})
+server.send({"command": "GET_LOGIN", "name": (name if name else socket.gethostname()), "processid": processID})
 message = server.recv()
 clientID = message["clientid"]
 
@@ -83,6 +85,11 @@ while (True):
         elif (command == "KILL"):
             logging.info("Client removed by the server.")
             if (config["client"]["verbose"]): print "Client removed by the server."
+            break
+            
+        else:
+            logging.error("Unknown command received from the server: '%'" % command)
+            print "ERROR: Unknown command received from the server: '%'" % command
             break
             
     except Exception as error:
