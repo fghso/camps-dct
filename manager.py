@@ -34,23 +34,20 @@ if (args.remove):
     server.close()
     
     command = message["command"]
-    if (command == "RM_RET"):
-        if (message["fail"]):
-            print "ERROR: %s" % message["reason"]
-        else:
-            removeSuccess = message["successlist"]
-            removeError = message["errorlist"]
-            if (not removeSuccess) and (not removeError): print "No disconnected client found to remove."
-            if (len(removeSuccess) > 1): 
-                print "Clients %s successfully removed." % " and ".join((", ".join(removeSuccess[:-1]), removeSuccess[-1]))
-            elif (removeSuccess): 
-                print "Client %s successfully removed." % removeSuccess[0]
-            if (len(removeError) > 1): 
-                print "ERROR: Clients %s do not exist or have already been removed." % " and ".join((", ".join(removeError[:-1]), removeError[-1]))
-            elif (removeError): 
-                print "ERROR: Client %s does not exist or has already been removed." % removeError[0]
+    if (message["fail"]):
+        print "ERROR: %s" % message["reason"]
     else:
-        print "ERROR: Unknown command received from the server: '%'" % command
+        removeSuccess = message["successlist"]
+        removeError = message["errorlist"]
+        if (not removeSuccess) and (not removeError): print "No disconnected client found to remove."
+        if (len(removeSuccess) > 1): 
+            print "Clients %s successfully removed." % " and ".join((", ".join(removeSuccess[:-1]), removeSuccess[-1]))
+        elif (removeSuccess): 
+            print "Client %s successfully removed." % removeSuccess[0]
+        if (len(removeError) > 1): 
+            print "ERROR: Clients %s do not exist or have already been removed." % " and ".join((", ".join(removeError[:-1]), removeError[-1]))
+        elif (removeError): 
+            print "ERROR: Client %s does not exist or has already been removed." % removeError[0]
     
 # Shut down server
 elif (args.shutdown):   
@@ -59,11 +56,8 @@ elif (args.shutdown):
     server.close()
     
     command = message["command"]
-    if (command == "SD_RET"):
-        if (message["fail"]): print "ERROR: %s" % message["reason"]
-        else: print "Server successfully shut down."
-    else:
-        print "ERROR: Unknown command received from the server: '%'" % command
+    if (message["fail"]): print "ERROR: %s" % message["reason"]
+    else: print "Server successfully shut down."
         
 # Show status
 else:
@@ -73,88 +67,89 @@ else:
     server.close()
     
     command = message["command"]
-    if (command == "GIVE_STATUS"):
-        clientsStatusList = message["clients"]
-        serverStatus = message["server"]
-        serverStatus["time"]["start"] = datetime.utcfromtimestamp(serverStatus["time"]["start"])
-        
-        # Raw status
-        if (args.status == "raw"):
-            status = "\nServer:\n"
-            status += str("  [address, port, pid, start, total, available, inprogress, succeeded, failed]\n  ")
-            status += str([serverAddress[1], serverAddress[2], serverStatus["pid"], 
-                            serverStatus["time"]["start"].strftime("%d/%m/%Y %H:%M:%S"), 
-                            serverStatus["counts"]["total"], serverStatus["counts"]["available"], 
-                            serverStatus["counts"]["inprogress"], serverStatus["counts"]["succeeded"], 
-                            serverStatus["counts"]["failed"]])
-            status += "\n\nClients:\n"
-            if (clientsStatusList): 
-                status += str("  [id, state, name, address, port, pid, start, update, resource, amount]\n  ")
-            else: 
-                status += "  No client connected right now.\n"
+    clientsStatusList = message["clients"]
+    serverStatus = message["server"]
+    serverStatus["time"]["start"] = datetime.utcfromtimestamp(serverStatus["time"]["start"])
+    
+    # Raw status
+    if (args.status == "raw"):
+        status = "\nServer:\n"
+        status += str("  [address, port, pid, start, total, succeeded, inprogress, available, failed, error]\n  ")
+        status += str([serverAddress[1], serverAddress[2], serverStatus["pid"], 
+                        serverStatus["time"]["start"].strftime("%d/%m/%Y %H:%M:%S"), 
+                        serverStatus["counts"]["total"], serverStatus["counts"]["succeeded"], 
+                        serverStatus["counts"]["inprogress"], serverStatus["counts"]["available"], 
+                        serverStatus["counts"]["failed"], serverStatus["counts"]["error"]])
+        status += "\n\nClients:\n"
+        if (clientsStatusList): 
+            status += str("  [id, state, hostname, address, port, pid, start, update, resource, amount]\n  ")
+        else: 
+            status += "  No client connected right now.\n"
+        for clientStatus in clientsStatusList:
+            clientStatus["time"]["start"] = datetime.utcfromtimestamp(clientStatus["time"]["start"])
+            clientStatus["time"]["lastupdate"] = datetime.utcfromtimestamp(clientStatus["time"]["lastupdate"])
+            status += str([clientStatus["clientid"], clientStatus["threadstate"], str(clientStatus["address"][0]), 
+                        str(clientStatus["address"][1]), clientStatus["address"][2], clientStatus["pid"],
+                        clientStatus["time"]["start"].strftime("%d/%m/%Y %H:%M:%S"), 
+                        clientStatus["time"]["lastupdate"].strftime("%d/%m/%Y %H:%M:%S"),                            
+                        clientStatus["resourceid"], clientStatus["amount"]])
+            status += "\n  "
+    # Extended status
+    elif (args.status == "extended"):
+        status = "ERROR: Not implemented yet."
+        # status = "\n" + (" Status (%s:%s/%s) " % (serverAddress[1], serverAddress[2], serverStatus["pid"])).center(50, ':') + "\n\n"
+        # if (clientsStatusList): 
+            # for clientStatus in clientsStatusList:
+                # clientStatus["time"]["start"] = datetime.utcfromtimestamp(clientStatus["time"]["start"])
+                # clientStatus["time"]["lastupdate"] = datetime.utcfromtimestamp(clientStatus["time"]["lastupdate"])
+                # clientStatus["threadstate"] = " " if (clientStatus["threadstate"] == 0) else ("-" if (clientStatus["threadstate"] == -1) else "+")
+                # elapsedTime = datetime.now() - clientStatus["time"]["start"]
+                # elapsedMinSec = divmod(elapsedTime.seconds, 60)
+                # elapsedHoursMin = divmod(elapsedMinSec[0], 60)
+                # status += "  #%d %s %s (%s:%s/%s): %s since %s [%d collected in %s]\n" % (
+                            # clientStatus["clientid"], 
+                            # clientStatus["threadstate"], 
+                            # clientStatus["name"], 
+                            # clientStatus["address"][1], 
+                            # clientStatus["address"][2], 
+                            # clientStatus["pid"], 
+                            # clientStatus["resourceid"], 
+                            # clientStatus["time"]["lastupdate"].strftime("%d/%m/%Y %H:%M:%S"), 
+                            # clientStatus["amount"], 
+                            # "%02dh%02dm%02ds" % (elapsedHoursMin[0],  elapsedHoursMin[1], elapsedMinSec[1])
+                        # )
+        # else:
+            # status += "  No client connected right now.\n"
+        # resourcesTotal = float(serverStatus["counts"]["total"])
+        # resourcesCollected = float(serverStatus["counts"]["succeeded"] + serverStatus["counts"]["failed"])
+        # collectedResourcesPercent = (resourcesCollected / resourcesTotal) * 100
+        # status += "\n" + (" Status (%.1f%% collected) " % collectedResourcesPercent).center(50, ':') + "\n"
+    # Basic status
+    else:
+        status = "\n" + (" Status (%s) " % serverAddress[0]).center(50, ':') + "\n\n"
+        if (clientsStatusList): 
             for clientStatus in clientsStatusList:
+                clientStatus["clientid"] = "#%d" % clientStatus["clientid"]
+                clientStatus["threadstate"] = " " if (clientStatus["threadstate"] == 0) else ("-" if (clientStatus["threadstate"] == -1) else "+")
                 clientStatus["time"]["start"] = datetime.utcfromtimestamp(clientStatus["time"]["start"])
                 clientStatus["time"]["lastupdate"] = datetime.utcfromtimestamp(clientStatus["time"]["lastupdate"])
-                status += str([clientStatus["clientid"], clientStatus["threadstate"], str(clientStatus["name"]), 
-                            str(clientStatus["address"][1]), clientStatus["address"][2], clientStatus["pid"],
-                            clientStatus["time"]["start"].strftime("%d/%m/%Y %H:%M:%S"), 
-                            clientStatus["time"]["lastupdate"].strftime("%d/%m/%Y %H:%M:%S"),                            
-                            clientStatus["resourceid"], clientStatus["amount"]])
-                status += "\n  "
-        # Extended status
-        elif (args.status == "extended"):
-            status = "\n" + (" Status (%s:%s/%s) " % (serverAddress[1], serverAddress[2], serverStatus["pid"])).center(50, ':') + "\n\n"
-            if (clientsStatusList): 
-                for clientStatus in clientsStatusList:
-                    clientStatus["time"]["start"] = datetime.utcfromtimestamp(clientStatus["time"]["start"])
-                    clientStatus["time"]["lastupdate"] = datetime.utcfromtimestamp(clientStatus["time"]["lastupdate"])
-                    elapsedTime = datetime.now() - clientStatus["time"]["start"]
-                    elapsedMinSec = divmod(elapsedTime.seconds, 60)
-                    elapsedHoursMin = divmod(elapsedMinSec[0], 60)
-                    status += "  #%d %s %s (%s:%s/%s): %s since %s [%d collected in %s]\n" % (
-                                clientStatus["clientid"], 
-                                clientStatus["threadstate"], 
-                                clientStatus["name"], 
-                                clientStatus["address"][1], 
-                                clientStatus["address"][2], 
-                                clientStatus["pid"], 
-                                clientStatus["resourceid"], 
-                                clientStatus["time"]["lastupdate"].strftime("%d/%m/%Y %H:%M:%S"), 
-                                clientStatus["amount"], 
-                                "%02dh%02dm%02ds" % (elapsedHoursMin[0],  elapsedHoursMin[1], elapsedMinSec[1])
-                            )
-            else:
-                status += "  No client connected right now.\n"
-            resourcesTotal = float(serverStatus["counts"]["total"])
-            resourcesCollected = float(serverStatus["counts"]["succeeded"] + serverStatus["counts"]["failed"])
-            collectedResourcesPercent = (resourcesCollected / resourcesTotal) * 100
-            status += "\n" + (" Status (%.1f%% collected) " % (collectedResourcesPercent)).center(50, ':') + "\n"
-        # Basic status
+                elapsedTime = datetime.now() - clientStatus["time"]["start"]
+                elapsedMinSec = divmod(elapsedTime.seconds, 60)
+                elapsedHoursMin = divmod(elapsedMinSec[0], 60)
+                status += "  %3s %s %s: %d resource%s received in %s\n" % (
+                            clientStatus["clientid"], 
+                            clientStatus["threadstate"], 
+                            clientStatus["address"][0], 
+                            clientStatus["amount"], 
+                            "" if (clientStatus["amount"] == 1) else "s",
+                            "%02dh%02dm%02ds" % (elapsedHoursMin[0],  elapsedHoursMin[1], elapsedMinSec[1])
+                        )
         else:
-            status = "\n" + (" Status (%s) " % serverAddress[0]).center(50, ':') + "\n\n"
-            if (clientsStatusList): 
-                for clientStatus in clientsStatusList:
-                    clientStatus["time"]["start"] = datetime.utcfromtimestamp(clientStatus["time"]["start"])
-                    clientStatus["time"]["lastupdate"] = datetime.utcfromtimestamp(clientStatus["time"]["lastupdate"])
-                    elapsedTime = datetime.now() - clientStatus["time"]["start"]
-                    elapsedMinSec = divmod(elapsedTime.seconds, 60)
-                    elapsedHoursMin = divmod(elapsedMinSec[0], 60)
-                    status += "  #%d %s %s (%s): %d collected in %s [collecting %s now]\n" % (
-                                clientStatus["clientid"], 
-                                clientStatus["threadstate"], 
-                                clientStatus["name"], 
-                                clientStatus["address"][0], 
-                                clientStatus["amount"], 
-                                "%02dh%02dm%02ds" % (elapsedHoursMin[0],  elapsedHoursMin[1], elapsedMinSec[1]),
-                                clientStatus["resourceid"]
-                            )
-            else:
-                status += "  No client connected right now.\n"
-            resourcesTotal = float(serverStatus["counts"]["total"])
-            resourcesCollected = float(serverStatus["counts"]["succeeded"] + serverStatus["counts"]["failed"])
-            collectedResourcesPercent = (resourcesCollected / resourcesTotal) * 100
-            status += "\n" + (" Status (%.2f%% collected) " % (collectedResourcesPercent)).center(50, ':') + "\n"
-        print status
-    else:
-        print "ERROR: Unknown command received from the server: '%'" % command
+            status += "  No client connected right now.\n"
+        resourcesTotal = float(serverStatus["counts"]["total"])
+        resourcesCollected = float(serverStatus["counts"]["succeeded"] + serverStatus["counts"]["failed"] + serverStatus["counts"]["error"])
+        collectedResourcesPercent = (resourcesCollected / resourcesTotal) * 100
+        status += "\n" + (" Status (%.2f%% completed) " % (collectedResourcesPercent)).center(50, ':') + "\n"
+
+    print status
     
