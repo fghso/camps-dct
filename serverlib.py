@@ -153,13 +153,13 @@ class ServerHandler(SocketServer.BaseRequestHandler):
                             
                 elif (command == "ERROR"):
                     clientResourceID = clientsInfo[clientID][2]
-                    if (message["critical"]):
-                        logging.error("Client %s reported critical error for resource %s." % (clientID, clientResourceID))
+                    if (message["type"] == "critical"):
+                        logging.error("Client %s reported critical error for resource %s. Connection closed." % (clientID, clientResourceID))
                         if (config["server"]["verbose"]): print "ERROR: Critical error on client %s, connection closed." % clientID
                         persist.update(clientResourceID, status["ERROR"], None)
                         running = False
-                    else:
-                        logging.error("Client %s reported error for resource %s: %s" % (clientID, clientResourceID, message["reason"]))
+                    elif (message["type"] == "cleanup"):
+                        logging.error("Client %s reported clean up error for resource %s." % (clientID, clientResourceID))
                         persist.update(clientResourceID, status["ERROR"], None)
                         client.send({"command": "ERROR_RET"})
                     

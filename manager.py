@@ -96,34 +96,35 @@ else:
             status += "\n  "
     # Extended status
     elif (args.status == "extended"):
-        status = "ERROR: Not implemented yet."
-        # status = "\n" + (" Status (%s:%s/%s) " % (serverAddress[1], serverAddress[2], serverStatus["pid"])).center(50, ':') + "\n\n"
-        # if (clientsStatusList): 
-            # for clientStatus in clientsStatusList:
-                # clientStatus["time"]["start"] = datetime.utcfromtimestamp(clientStatus["time"]["start"])
-                # clientStatus["time"]["lastupdate"] = datetime.utcfromtimestamp(clientStatus["time"]["lastupdate"])
-                # clientStatus["threadstate"] = " " if (clientStatus["threadstate"] == 0) else ("-" if (clientStatus["threadstate"] == -1) else "+")
-                # elapsedTime = datetime.now() - clientStatus["time"]["start"]
-                # elapsedMinSec = divmod(elapsedTime.seconds, 60)
-                # elapsedHoursMin = divmod(elapsedMinSec[0], 60)
-                # status += "  #%d %s %s (%s:%s/%s): %s since %s [%d collected in %s]\n" % (
-                            # clientStatus["clientid"], 
-                            # clientStatus["threadstate"], 
-                            # clientStatus["name"], 
-                            # clientStatus["address"][1], 
-                            # clientStatus["address"][2], 
-                            # clientStatus["pid"], 
-                            # clientStatus["resourceid"], 
-                            # clientStatus["time"]["lastupdate"].strftime("%d/%m/%Y %H:%M:%S"), 
-                            # clientStatus["amount"], 
-                            # "%02dh%02dm%02ds" % (elapsedHoursMin[0],  elapsedHoursMin[1], elapsedMinSec[1])
-                        # )
-        # else:
-            # status += "  No client connected right now.\n"
-        # resourcesTotal = float(serverStatus["counts"]["total"])
-        # resourcesCollected = float(serverStatus["counts"]["succeeded"] + serverStatus["counts"]["failed"])
-        # collectedResourcesPercent = (resourcesCollected / resourcesTotal) * 100
-        # status += "\n" + (" Status (%.1f%% collected) " % collectedResourcesPercent).center(50, ':') + "\n"
+        status = "\n" + (" Status (%s|%s:%s/%s) " % (serverAddress[0], serverAddress[1], serverAddress[2], serverStatus["pid"])).center(50, ':') + "\n\n"
+        if (clientsStatusList): 
+            for clientStatus in clientsStatusList:
+                clientStatus["clientid"] = "#%d" % clientStatus["clientid"]
+                clientStatus["threadstate"] = " " if (clientStatus["threadstate"] == 0) else ("-" if (clientStatus["threadstate"] == -1) else "+")
+                clientStatus["time"]["start"] = datetime.utcfromtimestamp(clientStatus["time"]["start"])
+                clientStatus["time"]["lastupdate"] = datetime.utcfromtimestamp(clientStatus["time"]["lastupdate"])
+                elapsedTime = datetime.now() - clientStatus["time"]["start"]
+                elapsedMinSec = divmod(elapsedTime.seconds, 60)
+                elapsedHoursMin = divmod(elapsedMinSec[0], 60)
+                status += "  %3s %s %s (%s:%s/%s): %s since %s [%d resource%s received in %s]\n" % (
+                            clientStatus["clientid"], 
+                            clientStatus["threadstate"], 
+                            clientStatus["address"][0], 
+                            clientStatus["address"][1], 
+                            clientStatus["address"][2], 
+                            clientStatus["pid"], 
+                            clientStatus["resourceid"], 
+                            clientStatus["time"]["lastupdate"].strftime("%d/%m/%Y %H:%M:%S"), 
+                            clientStatus["amount"], 
+                            "" if (clientStatus["amount"] == 1) else "s",
+                            "%02dh%02dm%02ds" % (elapsedHoursMin[0],  elapsedHoursMin[1], elapsedMinSec[1])
+                        )
+        else:
+            status += "  No client connected right now.\n"
+        resourcesTotal = float(serverStatus["counts"]["total"])
+        resourcesCollected = float(serverStatus["counts"]["succeeded"] + serverStatus["counts"]["failed"])
+        collectedResourcesPercent = (resourcesCollected / resourcesTotal) * 100
+        status += "\n" + (" Status (%.2f%% completed) " % collectedResourcesPercent).center(50, ':') + "\n"
     # Basic status
     else:
         status = "\n" + (" Status (%s) " % serverAddress[0]).center(50, ':') + "\n\n"

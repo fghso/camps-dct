@@ -30,10 +30,14 @@ if (args.verbose is not None): config["client"]["verbose"] = args.verbose
 if (args.logging is not None): config["client"]["logging"] = args.logging
 
 # Define auxiliary funtions
-def CriticalError(message):
+def ReportCleanUpError():
+    logging.exception("Exception while cleaning up, reporting error to server.")
+    server.send({"command": "ERROR", "type": "cleanup"})
+
+def ReportCriticalError(message):
     logging.error(message)
     if (config["client"]["verbose"]): print "ERROR: %s" % message
-    server.send({"command": "ERROR", "critical": True})
+    server.send({"command": "ERROR", "type": "critical"})
 
 # Get an instance of the crawler
 crawlerObject = crawler.Crawler()
@@ -72,37 +76,26 @@ while (True):
             resourceID = message["resourceid"]
             filters = message["filters"]
             
-            try: 
-                crawlerResponse = crawlerObject.crawl(resourceID, filters)
-            # If a SystemExit has been raised, abort execution
-            except SystemExit:
-                logging.error("SystemExit exception while crawling resource %s. Execution aborted." % resourceID)
-                if (config["client"]["verbose"]): print "ERROR: SystemExit exception while crawling resource %s. Execution aborted." % resourceID
-                server.send({"command": "ERROR", "critical": True})
+            # Try to crawl the resource
+            try: crawlerResponse = crawlerObject.crawl(resourceID, filters)
+            except SystemExit: # If a SystemExit exception has been raised, abort execution
+                ReportCriticalError("SystemExit exception while crawling resource %s. Execution aborted." % resourceID)
                 break
-            # If another type of exception has been raised, try to clean up
-            except:
-                try: 
-                    logging.exception("Exception while crawling resource %s, cleaning up now." % resourceID)
-                    crawlerObject.clean()
-                    server.send({"command": "DONE_ID", "fail": True})
-                # If a SystemExit has been raised, abort execution
-                except SystemExit:
-                    logging.error("SystemExit exception while cleaning up. Execution aborted.")
-                    if (config["client"]["verbose"]): print "ERROR: SystemExit exception while cleaning up. Execution aborted."
-                    server.send({"command": "ERROR", "critical": True})
+            # If crawl fails, try to clean up
+            except: 
+                logging.exception("Exception while crawling resource %s, cleaning up now." % resourceID)
+                try: crawlerObject.clean()
+                except SystemExit: 
+                    ReportCriticalError("SystemExit exception while cleaning up. Execution aborted.")
                     break
-                # If another type of exception has been raised, report error
-                except:
-                    logging.exception("Exception while cleaning up, reporting error to server.")
-                    server.send({"command": "ERROR", "critical": False, "reason": "Exception while cleaning up."})
+                # If clean up fails, report error
+                except: ReportCleanUpError()
+                else: server.send({"command": "DONE_ID", "fail": True})
+            # If everything is ok, tell server that the collection of the resource has been finished. 
+            # If feedback is enabled, also send the new resources to server
             else:
-                # Tell server that the collection of the resource has been finished. 
-                # If feedback is enabled, also send the new resources to server
-                if (config["global"]["feedback"]):
-                    server.send({"command": "DONE_ID", "fail": False, "resourceinfo": crawlerResponse[0], "newresources": crawlerResponse[1]})
-                else: 
-                    server.send({"command": "DONE_ID", "fail": False, "resourceinfo": crawlerResponse[0]})
+                if (config["global"]["feedback"]): server.send({"command": "DONE_ID", "fail": False, "resourceinfo": crawlerResponse[0], "newresources": crawlerResponse[1]})
+                else: server.send({"command": "DONE_ID", "fail": False, "resourceinfo": crawlerResponse[0]})
             
         elif (command == "DONE_RET"):
             if (message["fail"]):
@@ -112,20 +105,13 @@ while (True):
                 else: 
                     logging.error("Failed to insert the new resource %s after collect resource %s, cleaning up now." % (insertErrors[0], resourceID))
                 # Try to clean up
-                try:
-                    crawlerObject.clean()
-                # If a SystemExit has been raised, abort execution
-                except SystemExit:
-                    logging.error("SystemExit exception while cleaning up. Execution aborted.")
-                    if (config["client"]["verbose"]): print "ERROR: SystemExit exception while cleaning up. Execution aborted."
-                    server.send({"command": "ERROR", "critical": True})
+                try: crawlerObject.clean()
+                except SystemExit: # If a SystemExit exception has been raised, abort execution
+                    ReportCriticalError("SystemExit exception while cleaning up. Execution aborted.")
                     break
-                # If another type of exception has been raised, report error
-                except:
-                    logging.exception("Exception while cleaning up, reporting error to server.")
-                    server.send({"command": "ERROR", "critical": False, "reason": "Exception while cleaning up."})
-                else:
-                    server.send({"command": "DONE_ID", "fail": True})
+                # If clean up fails, report error
+                except: ReportCleanUpError()
+                else: server.send({"command": "DONE_ID", "fail": True})
             else:
                 server.send({"command": "GET_ID"})
             
