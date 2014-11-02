@@ -14,10 +14,11 @@ class BasePersistenceHandler():
                    "ERROR":     -2}
 
     def __init__(self, configurationsDictionary): pass # All configurations in the XML are passed to the persistence class
-    def select(self): return (None, None) # Return (resource id, resource info dictionary)
+    def select(self): return (None, None) # Return a tuple: (resource id, resource info dictionary)
     def update(self, resourceID, status, resourceInfo): pass
-    def insert(self, resourceID, resourceInfo): return True # Return True or False
-    def count(self): return (0, 0, 0, 0, 0, 0) # Return (total, succeeded, inprogress, available, failed, error)
+    def insert(self, resourceID, resourceInfo): return True # Return True if success or False otherwise
+    def count(self): return (0, 0, 0, 0, 0, 0) # Return a tuple: (total, succeeded, inprogress, available, failed, error)
+    def reset(self, status): return 0 # Return the number of resources reseted
     def close(self): pass
         
 
@@ -80,6 +81,7 @@ class MySQLPersistenceHandler(BasePersistenceHandler):
                 return False
             else: return True
         else: return True
+        finally: cursor.close()
         
     def count(self):
         cursor = self.mysqlConnection.cursor()
@@ -107,6 +109,15 @@ class MySQLPersistenceHandler(BasePersistenceHandler):
         cursor.close()
         
         return (total, succeeded, inprogress, available, failed, error)
+        
+    def reset(self, status):
+        cursor = self.mysqlConnection.cursor()
+        query = "UPDATE " + self.selectConfig["table"] + " SET status = %s WHERE status = %s"
+        cursor.execute(query, (self.statusCodes["AVAILABLE"], status))
+        affectedRows = cursor.rowcount
+        self.mysqlConnection.commit()
+        cursor.close()
+        return affectedRows
         
     def close(self):
         self.mysqlConnection.close()
