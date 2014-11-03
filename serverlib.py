@@ -25,7 +25,7 @@ clientsInfo = {}
 clientsThreads = {}
 
 # Define the next ID to give to a new client
-nextFreeID = 8
+nextFreeID = 1
 
 # Flag to indicate wheter the server is running or no
 shutingDown = False
@@ -89,6 +89,9 @@ class ServerHandler(SocketServer.BaseRequestHandler):
                 
                 elif (command == "GET_ID"):
                     clientStopEvent = clientsThreads[clientID][1]
+                    clientsInfo[clientID][2] = None
+                    clientsInfo[clientID][3] += 1
+                    clientsInfo[clientID][5] = datetime.now()
                     tryagain = True
                     while (tryagain):
                         tryagain = False
@@ -100,7 +103,6 @@ class ServerHandler(SocketServer.BaseRequestHandler):
                             # If there is a resource available, send ID to client
                             if (resourceID):
                                 clientsInfo[clientID][2] = resourceID
-                                clientsInfo[clientID][3] += 1
                                 clientsInfo[clientID][5] = datetime.now()
                                 filters = self.applyFilters(resourceID, resourceInfo)
                                 client.send({"command": "GIVE_ID", "resourceid": resourceID, "filters": filters})
@@ -118,14 +120,10 @@ class ServerHandler(SocketServer.BaseRequestHandler):
                                     if (notShutingDown):
                                         try:
                                             shutingDown = True
-                                            logging.info("Task done, finishing clients and server..." )
-                                            if (config["server"]["verbose"]): print "Task done, finishing clients and server..." 
+                                            logging.info("Task done, finishing clients and server... \nClient %d finished." % clientID)
+                                            if (config["server"]["verbose"]): print "Task done, finishing clients and server... \nClient %d finished." % clientID
                                             for ID in clientsThreads.iterkeys(): 
-                                                if (ID != clientID): 
-                                                    clientsThreads[ID][0].join()
-                                                else: 
-                                                    logging.info("Client %d finished." % clientID)
-                                                    if (config["server"]["verbose"]): print "Client %d finished." % clientID
+                                                if (ID != clientID): clientsThreads[ID][0].join()
                                             self.server.shutdown()
                                             logging.info("Server finished." )
                                             if (config["server"]["verbose"]): print "Server finished."

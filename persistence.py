@@ -85,30 +85,22 @@ class MySQLPersistenceHandler(BasePersistenceHandler):
         
     def count(self):
         cursor = self.mysqlConnection.cursor()
-        totalQuery = "SELECT count(resource_id) FROM " + self.selectConfig["table"]
-        countsQuery = "SELECT count(resource_id) FROM " + self.selectConfig["table"] + " WHERE status = %s"
+        query = "SELECT status, count(*) FROM " + self.selectConfig["table"] + " GROUP BY status"
         
-        cursor.execute(totalQuery)
-        total = cursor.fetchall()[0][0]
-        
-        cursor.execute(countsQuery, (self.statusCodes["SUCCEDED"],))
-        succeeded = cursor.fetchall()[0][0]
-        
-        cursor.execute(countsQuery, (self.statusCodes["INPROGRESS"],))
-        inprogress = cursor.fetchall()[0][0]
-        
-        cursor.execute(countsQuery, (self.statusCodes["AVAILABLE"],))
-        available = cursor.fetchall()[0][0]
-        
-        cursor.execute(countsQuery, (self.statusCodes["FAILED"],))
-        failed = cursor.fetchall()[0][0]
-        
-        cursor.execute(countsQuery, (self.statusCodes["ERROR"],))
-        error = cursor.fetchall()[0][0]
-        
+        cursor.execute(query)
+        result = cursor.fetchall()
         cursor.close()
         
-        return (total, succeeded, inprogress, available, failed, error)
+        counts = [0, 0, 0, 0, 0, 0]
+        for row in result:
+            if (row[0] == self.statusCodes["SUCCEDED"]): counts[1] = row[1]
+            elif (row[0] == self.statusCodes["INPROGRESS"]): counts[2] = row[1]
+            elif (row[0] == self.statusCodes["AVAILABLE"]): counts[3] = row[1]
+            elif (row[0] == self.statusCodes["FAILED"]): counts[4] = row[1]
+            elif (row[0] == self.statusCodes["ERROR"]): counts[5] = row[1]
+            counts[0] += row[1]
+        
+        return tuple(counts)
         
     def reset(self, status):
         cursor = self.mysqlConnection.cursor()

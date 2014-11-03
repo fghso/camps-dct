@@ -103,7 +103,8 @@ else:
                         str(clientStatus["address"][1]), clientStatus["address"][2], clientStatus["pid"],
                         clientStatus["time"]["start"].strftime("%d/%m/%Y %H:%M:%S"), 
                         clientStatus["time"]["lastrequest"].strftime("%d/%m/%Y %H:%M:%S"),                            
-                        clientStatus["resourceid"], clientStatus["amount"]])
+                        clientStatus["resourceid"] if (clientStatus["resourceid"]) else "waiting", 
+                        clientStatus["amount"]])
             status += "\n    "
         status += "\n" + (" Status ").center(50, ':') + "\n"
     # Extended status
@@ -118,14 +119,14 @@ else:
                 elapsedTime = datetime.now() - clientStatus["time"]["start"]
                 elapsedMinSec = divmod(elapsedTime.seconds, 60)
                 elapsedHoursMin = divmod(elapsedMinSec[0], 60)
-                status += "  %3s %s %s (%s:%s/%s): working on resource %s since %s [%d resource%s processed in %s]\n" % (
+                status += "  %3s %s %s (%s:%s/%s): %s since %s [%d resource%s processed in %s]\n" % (
                             clientStatus["clientid"], 
                             clientStatus["threadstate"], 
                             clientStatus["address"][0], 
                             clientStatus["address"][1], 
                             clientStatus["address"][2], 
                             clientStatus["pid"], 
-                            clientStatus["resourceid"], 
+                            "working on resource %s" % clientStatus["resourceid"] if (clientStatus["resourceid"]) else "waiting for resource", 
                             clientStatus["time"]["lastrequest"].strftime("%d/%m/%Y %H:%M:%S"), 
                             clientStatus["amount"], 
                             "" if (clientStatus["amount"] == 1) else "s",
