@@ -17,8 +17,9 @@ from datetime import datetime
 
 # ==================== Global variables ====================
 # Dictionary to store information lists about each client:
-#   [network address, process identification (PID), ID of the resource being collected, 
-#    number of resources already collected, collection start time and last GET_ID requested time] 
+#   [network address, process identification (PID), primary key of the resource being collected, 
+#    ID of the resource being collected, number of resources already collected, 
+#    collection start time and last GET_ID requested time] 
 clientsInfo = {} 
 
 # Store a reference for the thread running the client and an event to interrupt its execution
@@ -41,7 +42,7 @@ shutdownLock = threading.Lock()
 class ServerHandler(SocketServer.BaseRequestHandler):
     def setup(self):
         # Get persistence instance
-        self.persist = self.server.PersistenceHandlerClass(self.server.config)
+        self.persist = self.server.PersistenceHandlerClass(self.server.config["persistence"]["handler"])
         # Get filters instances
         self.parallelFilters = [FilterClass(filterName) for (FilterClass, filterName) in self.server.ParallelFiltersClasses]
         self.sequentialFilters = [FilterClass(filterName) for (FilterClass, filterName) in self.server.SequentialFiltersClasses]
@@ -66,10 +67,10 @@ class ServerHandler(SocketServer.BaseRequestHandler):
                 
                 # Stop thread execution if the connection has been interrupted
                 if (not message): 
-                    clientResourceID = clientsInfo[clientID][2]
+                    clientResourceKey = clientsInfo[clientID][2]
                     logging.error("Connection to client %d has been abruptly closed." % clientID)
                     if (config["server"]["verbose"]): print "ERROR: Connection to client %d has been abruptly closed." % clientID
-                    persist.update(clientResourceID, status["ERROR"], None)
+                    persist.update(clientResourceKey, status["ERROR"], None)
                     running = False
                     continue
 
@@ -81,7 +82,7 @@ class ServerHandler(SocketServer.BaseRequestHandler):
                         nextFreeID += 1
                     clientAddress = client.getaddress()
                     clientPid = message["processid"]
-                    clientsInfo[clientID] = [clientAddress, clientPid, None, -1, datetime.now(), None]
+                    clientsInfo[clientID] = [clientAddress, clientPid, None, None, -1, datetime.now(), None]
                     clientsThreads[clientID] = (threading.current_thread(), threading.Event())
                     client.send({"command": "GIVE_LOGIN", "clientid": clientID})
                     logging.info("New client connected: %d" % clientID)
@@ -90,20 +91,22 @@ class ServerHandler(SocketServer.BaseRequestHandler):
                 elif (command == "GET_ID"):
                     clientStopEvent = clientsThreads[clientID][1]
                     clientsInfo[clientID][2] = None
-                    clientsInfo[clientID][3] += 1
-                    clientsInfo[clientID][5] = datetime.now()
+                    clientsInfo[clientID][3] = None
+                    clientsInfo[clientID][4] += 1
+                    clientsInfo[clientID][6] = datetime.now()
                     tryagain = True
                     while (tryagain):
                         tryagain = False
                         # If the client hasn't been removed, check resource availability
                         if (not clientStopEvent.is_set()):
                             with getIDLock:
-                                (resourceID, resourceInfo) = persist.select()
-                                if (resourceID): persist.update(resourceID, status["INPROGRESS"], None)
+                                (resourceKey, resourceID, resourceInfo) = persist.select()
+                                if (resourceID): persist.update(resourceKey, status["INPROGRESS"], None)
                             # If there is a resource available, send ID to client
                             if (resourceID):
-                                clientsInfo[clientID][2] = resourceID
-                                clientsInfo[clientID][5] = datetime.now()
+                                clientsInfo[clientID][2] = resourceKey
+                                clientsInfo[clientID][3] = resourceID
+                                clientsInfo[clientID][6] = datetime.now()
                                 filters = self.applyFilters(resourceID, resourceInfo)
                                 client.send({"command": "GIVE_ID", "resourceid": resourceID, "filters": filters})
                             else:
@@ -143,9 +146,10 @@ class ServerHandler(SocketServer.BaseRequestHandler):
                             running = False
                     
                 elif (command == "DONE_ID"):
-                    clientResourceID = clientsInfo[clientID][2]
+                    clientResourceKey = clientsInfo[clientID][2]
+                    clientResourceID = clientsInfo[clientID][3]
                     if (message["fail"]):
-                        persist.update(clientResourceID, status["FAILED"], None)
+                        persist.update(clientResourceKey, status["FAILED"], None)
                         client.send({"command": "DONE_RET", "fail": False})
                     else:
                         insertErrors = []
@@ -161,24 +165,25 @@ class ServerHandler(SocketServer.BaseRequestHandler):
                                 logging.error("Failed to insert the new resources %s sent by client %s after collect resource %s." % (" and ".join((", ".join(insertErrors[:-1]), insertErrors[-1])), clientID, clientResourceID))
                             else: 
                                 logging.error("Failed to insert the new resource %s sent by client %s after collect resource %s." % (insertErrors[0], clientID, clientResourceID))
-                            persist.update(clientResourceID, status["FAILED"], None)
+                            persist.update(clientResourceKey, status["FAILED"], None)
                             client.send({"command": "DONE_RET", "fail": True, "inserterrors": insertErrors})
                         # Report everything is OK    
                         else: 
                             clientResourceInfo = message["resourceinfo"]
-                            persist.update(clientResourceID, status["SUCCEDED"], clientResourceInfo)
+                            persist.update(clientResourceKey, status["SUCCEDED"], clientResourceInfo)
                             client.send({"command": "DONE_RET", "fail": False})
                             
                 elif (command == "ERROR"):
-                    clientResourceID = clientsInfo[clientID][2]
+                    clientResourceKey = clientsInfo[clientID][2]
+                    clientResourceID = clientsInfo[clientID][3]
                     if (message["type"] == "critical"):
                         logging.error("Client %s reported critical error for resource %s. Connection closed." % (clientID, clientResourceID))
                         if (config["server"]["verbose"]): print "ERROR: Critical error on client %s, connection closed." % clientID
-                        persist.update(clientResourceID, status["ERROR"], None)
+                        persist.update(clientResourceKey, status["ERROR"], None)
                         running = False
                     elif (message["type"] == "cleanup"):
                         logging.error("Client %s reported clean up error for resource %s." % (clientID, clientResourceID))
-                        persist.update(clientResourceID, status["ERROR"], None)
+                        persist.update(clientResourceKey, status["ERROR"], None)
                         client.send({"command": "ERROR_RET"})
                     
                 elif (command == "GET_STATUS"):
@@ -190,10 +195,10 @@ class ServerHandler(SocketServer.BaseRequestHandler):
                         clientStatus["threadstate"] = clientThreadState
                         clientStatus["address"] = info[0]
                         clientStatus["pid"] = info[1]
-                        clientStatus["resourceid"] = info[2]
-                        clientStatus["amount"] = info[3]
-                        clientStatus["time"] = {"start": calendar.timegm(info[4].utctimetuple())}
-                        clientStatus["time"]["lastrequest"] = calendar.timegm(info[5].utctimetuple())
+                        clientStatus["resourceid"] = info[3]
+                        clientStatus["amount"] = info[4]
+                        clientStatus["time"] = {"start": calendar.timegm(info[5].utctimetuple())}
+                        clientStatus["time"]["lastrequest"] = calendar.timegm(info[6].utctimetuple())
                         clientsStatusList.append(clientStatus)
                     # Server status
                     serverStatus = {"pid": os.getpid()}

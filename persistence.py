@@ -1,6 +1,7 @@
 # -*- coding: iso-8859-1 -*-
 
 import logging
+from collections import deque
 import mysql.connector
 from mysql.connector.errors import Error
 from mysql.connector import errorcode
@@ -13,9 +14,9 @@ class BasePersistenceHandler():
                    "FAILED":    -1,
                    "ERROR":     -2}
 
-    def __init__(self, configurationsDictionary): pass # All configurations in the XML are passed to the persistence class
-    def select(self): return (None, None) # Return a tuple: (resource id, resource info dictionary)
-    def update(self, resourceID, status, resourceInfo): pass
+    def __init__(self, configurationsDictionary): pass # Receives everything in handler section of the XML configurations file
+    def select(self): return (None, None, None) # Return a tuple: (resource unique key, resource id, resource info dictionary)
+    def update(self, resourceKey, status, resourceInfo): pass
     def insert(self, resourceID, resourceInfo): return True # Return True if success or False otherwise
     def count(self): return (0, 0, 0, 0, 0, 0) # Return a tuple: (total, succeeded, inprogress, available, failed, error)
     def reset(self, status): return 0 # Return the number of resources reseted
@@ -28,14 +29,14 @@ class MySQLPersistenceHandler(BasePersistenceHandler):
         self.mysqlConnection = mysql.connector.connect(user=self.selectConfig["user"], password=self.selectConfig["password"], host=self.selectConfig["host"], database=self.selectConfig["name"])
                 
     def _extractConfig(self, configurationsDictionary):
-        self.selectConfig = configurationsDictionary["persistence"]["handler"]["select"]
+        self.selectConfig = configurationsDictionary["select"]
     
         # Set default values
         if ("resourceinfo" not in self.selectConfig): self.selectConfig["resourceinfo"] = []
         elif (not isinstance(self.selectConfig["resourceinfo"], list)): self.selectConfig["resourceinfo"] = [self.selectConfig["resourceinfo"]]
         
-        if ("insert" not in configurationsDictionary["persistence"]["handler"]): self.insertConfig = self.selectConfig
-        else: self.insertConfig = configurationsDictionary["persistence"]["handler"]["insert"]
+        if ("insert" not in configurationsDictionary): self.insertConfig = self.selectConfig
+        else: self.insertConfig = configurationsDictionary["insert"]
         
         if ("user" not in self.insertConfig): self.insertConfig["user"] = self.selectConfig["user"]
         if ("password" not in self.insertConfig): self.insertConfig["password"] = self.selectConfig["password"]
@@ -45,29 +46,29 @@ class MySQLPersistenceHandler(BasePersistenceHandler):
         
     def select(self):
         cursor = self.mysqlConnection.cursor()
-        query = "SELECT " + ", ".join(["resource_id"] + self.selectConfig["resourceinfo"]) + " FROM " + self.selectConfig["table"] + " WHERE status = %s ORDER BY resources_pk LIMIT 1"
+        query = "SELECT " + ", ".join(["resources_pk", "resource_id"] + self.selectConfig["resourceinfo"]) + " FROM " + self.selectConfig["table"] + " WHERE status = %s ORDER BY resources_pk LIMIT 1"
         cursor.execute(query, (self.statusCodes["AVAILABLE"],))
         resource = cursor.fetchone()
         self.mysqlConnection.commit()
         cursor.close()
-        if resource: return (resource[0], dict(zip(self.selectConfig["resourceinfo"], resource[1:])))
-        else: return (None, None)
+        if (resource): return (resource[0], resource[1], dict(zip(self.selectConfig["resourceinfo"], resource[2:])))
+        else: return (None, None, None)
         
-    def update(self, resourceID, status, resourceInfo):
+    def update(self, resourceKey, status, resourceInfo):
         cursor = self.mysqlConnection.cursor()
-        if not resourceInfo: 
-            query = "UPDATE " + self.selectConfig["table"] + " SET status = %s WHERE resource_id = %s"
-            cursor.execute(query, (status, resourceID))
+        if (not resourceInfo): 
+            query = "UPDATE " + self.selectConfig["table"] + " SET status = %s WHERE resources_pk = %s"
+            cursor.execute(query, (status, resourceKey))
         else: 
-            query = "UPDATE " + self.selectConfig["table"] + " SET status = %s, " + " = %s, ".join(resourceInfo.keys()) + " = %s WHERE resource_id = %s"
-            cursor.execute(query, (status,) + tuple(resourceInfo.values()) + (resourceID,))
+            query = "UPDATE " + self.selectConfig["table"] + " SET status = %s, " + " = %s, ".join(resourceInfo.keys()) + " = %s WHERE resources_pk = %s"
+            cursor.execute(query, (status,) + tuple(resourceInfo.values()) + (resourceKey,))
         self.mysqlConnection.commit()
         cursor.close()
         
     def insert(self, resourceID, resourceInfo):
         cursor = self.mysqlConnection.cursor()
         try: 
-            if not resourceInfo:
+            if (not resourceInfo):
                 query = "INSERT INTO " + self.insertConfig["table"] + " (resource_id) VALUES (%s)"
                 cursor.execute(query, (resourceID,))
                 self.mysqlConnection.commit()
@@ -76,7 +77,7 @@ class MySQLPersistenceHandler(BasePersistenceHandler):
                 cursor.execute(query, (resourceID,) + tuple(resourceInfo.values()))
                 self.mysqlConnection.commit()
         except mysql.connector.Error as err:
-            if err.errno != errorcode.ER_DUP_ENTRY:
+            if (err.errno != errorcode.ER_DUP_ENTRY):
                 logging.exception("Exception inserting resource.")
                 return False
             else: return True
@@ -113,4 +114,34 @@ class MySQLPersistenceHandler(BasePersistenceHandler):
         
     def close(self):
         self.mysqlConnection.close()
+        
+        
+class InMemoryPersistenceHandler(BasePersistenceHandler):
+    resources = {}
+    succeeded = 0
+    inProgress = {}
+    available = deque()
+    failed = {}
+    error = {}    
+
+    def __init__(self, configurationsDictionary): 
+        pass
+    
+    def select(self): 
+        return (None, None, None)
+    
+    def update(self, resourceKey, status, resourceInfo): 
+        pass
+        
+    def insert(self, resourceID, resourceInfo): 
+        return True
+        
+    def count(self): 
+        return (0, 0, 0, 0, 0, 0)
+        
+    def reset(self, status): 
+        return 0
+        
+    def close(self): 
+        pass
         
