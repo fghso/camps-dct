@@ -1,7 +1,10 @@
 # -*- coding: iso-8859-1 -*-
 
+import threading
 import logging
+import common
 from collections import deque
+from copy import deepcopy
 import mysql.connector
 from mysql.connector.errors import Error
 from mysql.connector import errorcode
@@ -17,11 +20,100 @@ class BasePersistenceHandler():
     def __init__(self, configurationsDictionary): pass # Receives everything in handler section of the XML configurations file
     def select(self): return (None, None, None) # Return a tuple: (resource unique key, resource id, resource info dictionary)
     def update(self, resourceKey, status, resourceInfo): pass
-    def insert(self, resourceID, resourceInfo): return True # Return True if success or False otherwise
+    def insert(self, resourceID, resourceInfo): pass
     def count(self): return (0, 0, 0, 0, 0, 0) # Return a tuple: (total, succeeded, inprogress, available, failed, error)
     def reset(self, status): return 0 # Return the number of resources reseted
     def close(self): pass
         
+# This class was built as basis for FilePersistenceHandler and for test purposes. 
+# It is not intended for direct use in a production enviroment
+class MemoryPersistenceHandler(BasePersistenceHandler):
+    loadResourcesLock = threading.Lock()
+    resources = []
+    IDsHash = {}
+    statusRecords = {BasePersistenceHandler.statusCodes["SUCCEDED"]:   0,
+                     BasePersistenceHandler.statusCodes["INPROGRESS"]: deque(),
+                     BasePersistenceHandler.statusCodes["AVAILABLE"]:  deque(), 
+                     BasePersistenceHandler.statusCodes["FAILED"]:     deque(),
+                     BasePersistenceHandler.statusCodes["ERROR"]:      deque()}
+
+    def __init__(self, configurationsDictionary): 
+        self._extractConfig(configurationsDictionary)
+        with self.loadResourcesLock:
+            if (not self.resources):
+                for resource in self.selectConfig["resource"]:
+                    status = int(resource["status"])
+                    if "resourceinfo" not in resource: resource["resourceinfo"] = None
+                    self.resources.append({"id": int(resource["id"]), "status": status, "info": resource["resourceinfo"]})
+                    if (status == self.statusCodes["SUCCEDED"]): self.statusRecords[self.statusCodes["SUCCEDED"]] += 1
+                    else: self.statusRecords[status].append(len(self.resources) - 1)
+                    if (self.config["uniqueresourceid"]): 
+                        if not (resource["id"] in self.IDsHash): self.IDsHash[resource["id"]] = len(self.resources) - 1
+                        else: raise KeyError("Resource ID %s already exists." % resource["id"])
+            
+    def _extractConfig(self, configurationsDictionary):
+        # Global
+        self.config = configurationsDictionary
+        
+        if ("uniqueresourceid" not in self.config): self.config["uniqueresourceid"] = False
+        else: self.config["uniqueresourceid"] = common.str2bool(self.config["uniqueresourceid"])
+    
+        # Select
+        self.selectConfig = configurationsDictionary["select"]
+        
+        if ("resource" not in self.selectConfig): self.selectConfig["resource"] = []
+        elif (not isinstance(self.selectConfig["resource"], list)): self.selectConfig["resource"] = [self.selectConfig["resource"]]
+    
+        # Insert
+        if ("insert" not in configurationsDictionary): self.insertConfig = {}
+        else: self.insertConfig = configurationsDictionary["insert"]
+    
+        if ("ondupkeyupdate" not in self.insertConfig): self.insertConfig["ondupkeyupdate"] = False
+        else: self.insertConfig["ondupkeyupdate"] = common.str2bool(self.insertConfig["ondupkeyupdate"])
+    
+    def select(self): 
+        if (self.statusRecords[self.statusCodes["AVAILABLE"]]): 
+            pk = self.statusRecords[self.statusCodes["AVAILABLE"]][0]
+            return (pk, self.resources[pk]["id"], deepcopy(self.resources[pk]["info"]))
+        else: return (None, None, None)
+    
+    def update(self, resourceKey, status, resourceInfo): 
+        resource = self.resources[resourceKey]
+        self.statusRecords[resource["status"]].remove(resourceKey)
+        resource["status"] = status
+        if (resourceInfo): resource["info"] = resourceInfo
+        if (status == self.statusCodes["SUCCEDED"]): self.statusRecords[self.statusCodes["SUCCEDED"]] += 1
+        else: self.statusRecords[status].append(resourceKey)
+        
+    def insert(self, resourceID, resourceInfo): 
+        if (self.config["uniqueresourceid"]):
+            if (resourceID in self.IDsHash):
+                if (self.insertConfig["ondupkeyupdate"]): 
+                    self.resources[self.IDsHash[resourceID]]["info"] = resourceInfo
+                    return
+                else: raise KeyError("Resource ID %s already exists." % resourceID)
+        self.resources.append({"id": resourceID, "status": self.statusCodes["AVAILABLE"], "info": resourceInfo})
+        self.statusRecords[self.statusCodes["AVAILABLE"]].append(len(self.resources) - 1)
+        if (self.config["uniqueresourceid"]): self.IDsHash[resourceID] = len(self.resources) - 1
+        print self.resources
+        
+    def count(self): 
+        return (len(self.resources), 
+                self.statusRecords[self.statusCodes["SUCCEDED"]], 
+                len(self.statusRecords[self.statusCodes["INPROGRESS"]]), 
+                len(self.statusRecords[self.statusCodes["AVAILABLE"]]), 
+                len(self.statusRecords[self.statusCodes["FAILED"]]), 
+                len(self.statusRecords[self.statusCodes["ERROR"]]))
+        
+    def reset(self, status): 
+        for pk in self.statusRecords[status]:
+            self.resources[pk]["status"] = self.statusCodes["AVAILABLE"]
+            self.statusRecords[self.statusCodes["AVAILABLE"]].append(pk)
+            
+        resetedCount = len(self.statusRecords[status])
+        self.statusRecords[status].clear()
+            
+        return resetedCount
 
 class MySQLPersistenceHandler(BasePersistenceHandler):
     def __init__(self, configurationsDictionary):
@@ -43,6 +135,8 @@ class MySQLPersistenceHandler(BasePersistenceHandler):
         if ("host" not in self.insertConfig): self.insertConfig["host"] = self.selectConfig["host"]
         if ("name" not in self.insertConfig): self.insertConfig["name"] = self.selectConfig["name"]
         if ("table" not in self.insertConfig): self.insertConfig["table"] = self.selectConfig["table"]
+        if ("ondupkeyupdate" not in self.insertConfig): self.insertConfig["ondupkeyupdate"] = False
+        else: self.insertConfig["ondupkeyupdate"] = common.str2bool(self.insertConfig["ondupkeyupdate"])
         
     def select(self):
         cursor = self.mysqlConnection.cursor()
@@ -67,22 +161,18 @@ class MySQLPersistenceHandler(BasePersistenceHandler):
         
     def insert(self, resourceID, resourceInfo):
         cursor = self.mysqlConnection.cursor()
-        try: 
-            if (not resourceInfo):
-                query = "INSERT INTO " + self.insertConfig["table"] + " (resource_id) VALUES (%s)"
-                cursor.execute(query, (resourceID,))
-                self.mysqlConnection.commit()
-            else:
-                query = "INSERT INTO " + self.insertConfig["table"] + " (" + ", ".join(["resource_id"] + resourceInfo.keys()) + ") VALUES (" + ", ".join(["%s"] + (["%s"] * len(resourceInfo))) + ")"
-                cursor.execute(query, (resourceID,) + tuple(resourceInfo.values()))
-                self.mysqlConnection.commit()
-        except mysql.connector.Error as err:
-            if (err.errno != errorcode.ER_DUP_ENTRY):
-                logging.exception("Exception inserting resource.")
-                return False
-            else: return True
-        else: return True
-        finally: cursor.close()
+        if (not resourceInfo):
+            query = "INSERT INTO " + self.insertConfig["table"] + " (resource_id) VALUES (%s)"
+            if (self.insertConfig["ondupkeyupdate"]): query += " ON DUPLICATE KEY UPDATE resource_id = VALUES(resource_id)"
+            cursor.execute(query, (resourceID,))
+            self.mysqlConnection.commit()
+        else:
+            query = "INSERT INTO " + self.insertConfig["table"] + " (" + ", ".join(["resource_id"] + resourceInfo.keys()) + ") VALUES (" + ", ".join(["%s"] + (["%s"] * len(resourceInfo))) + ")"
+            if (self.insertConfig["ondupkeyupdate"]):
+                query += " ON DUPLICATE KEY UPDATE resource_id = VALUES(resource_id), " + ", ".join(["{0} = VALUES({0})".format(key) for key in resourceInfo.keys()])
+            cursor.execute(query, (resourceID,) + tuple(resourceInfo.values()))
+            self.mysqlConnection.commit()
+        cursor.close()
         
     def count(self):
         cursor = self.mysqlConnection.cursor()
@@ -114,34 +204,4 @@ class MySQLPersistenceHandler(BasePersistenceHandler):
         
     def close(self):
         self.mysqlConnection.close()
-        
-        
-class InMemoryPersistenceHandler(BasePersistenceHandler):
-    resources = {}
-    succeeded = 0
-    inProgress = {}
-    available = deque()
-    failed = {}
-    error = {}    
-
-    def __init__(self, configurationsDictionary): 
-        pass
-    
-    def select(self): 
-        return (None, None, None)
-    
-    def update(self, resourceKey, status, resourceInfo): 
-        pass
-        
-    def insert(self, resourceID, resourceInfo): 
-        return True
-        
-    def count(self): 
-        return (0, 0, 0, 0, 0, 0)
-        
-    def reset(self, status): 
-        return 0
-        
-    def close(self): 
-        pass
         

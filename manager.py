@@ -119,17 +119,17 @@ else:
                 elapsedTime = datetime.now() - clientStatus["time"]["start"]
                 elapsedMinSec = divmod(elapsedTime.seconds, 60)
                 elapsedHoursMin = divmod(elapsedMinSec[0], 60)
-                status += "  %3s %s %s (%s:%s/%s): %s since %s [%d resource%s processed in %s]\n" % (
+                status += "  %3s %s %s (%s:%s/%s): %s since %s [%d processed in %s]\n" % (
                             clientStatus["clientid"], 
                             clientStatus["threadstate"], 
                             clientStatus["address"][0], 
                             clientStatus["address"][1], 
                             clientStatus["address"][2], 
                             clientStatus["pid"], 
-                            "working on resource %s" % clientStatus["resourceid"] if (clientStatus["resourceid"]) else "waiting for resource", 
+                            "working on %s" % clientStatus["resourceid"] if (clientStatus["resourceid"]) else "waiting for new resource", 
                             clientStatus["time"]["lastrequest"].strftime("%d/%m/%Y %H:%M:%S"), 
                             clientStatus["amount"], 
-                            "" if (clientStatus["amount"] == 1) else "s",
+                            #"" if (clientStatus["amount"] == 1) else "s",
                             "%02dh%02dm%02ds" % (elapsedHoursMin[0],  elapsedHoursMin[1], elapsedMinSec[1])
                         )
         else:
@@ -182,17 +182,13 @@ else:
             for clientStatus in clientsStatusList:
                 clientStatus["clientid"] = "#%d" % clientStatus["clientid"]
                 clientStatus["threadstate"] = " " if (clientStatus["threadstate"] == 0) else ("-" if (clientStatus["threadstate"] == -1) else "+")
-                clientStatus["time"]["start"] = datetime.utcfromtimestamp(clientStatus["time"]["start"])
-                elapsedTime = datetime.now() - clientStatus["time"]["start"]
-                elapsedMinSec = divmod(elapsedTime.seconds, 60)
-                elapsedHoursMin = divmod(elapsedMinSec[0], 60)
-                status += "  %3s %s %s: %d resource%s processed in %s\n" % (
+                clientStatus["time"]["lastrequest"] = datetime.utcfromtimestamp(clientStatus["time"]["lastrequest"])
+                status += "  %3s %s %s: %s since %s\n" % (
                             clientStatus["clientid"], 
                             clientStatus["threadstate"], 
                             clientStatus["address"][0], 
-                            clientStatus["amount"], 
-                            "" if (clientStatus["amount"] == 1) else "s",
-                            "%02dh%02dm%02ds" % (elapsedHoursMin[0],  elapsedHoursMin[1], elapsedMinSec[1])
+                            "working on %s" % clientStatus["resourceid"] if (clientStatus["resourceid"]) else "waiting for new resource", 
+                            clientStatus["time"]["lastrequest"].strftime("%d/%m/%Y %H:%M:%S")
                         )
         else:
             status += "  No client connected right now.\n"

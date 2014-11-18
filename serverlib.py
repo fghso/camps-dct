@@ -13,6 +13,7 @@ import common
 import persistence
 import filters
 from datetime import datetime
+from copy import deepcopy
 
 
 # ==================== Global variables ====================
@@ -42,7 +43,7 @@ shutdownLock = threading.Lock()
 class ServerHandler(SocketServer.BaseRequestHandler):
     def setup(self):
         # Get persistence instance
-        self.persist = self.server.PersistenceHandlerClass(self.server.config["persistence"]["handler"])
+        self.persist = self.server.PersistenceHandlerClass(deepcopy(self.server.config["persistence"]["handler"]))
         # Get filters instances
         self.parallelFilters = [FilterClass(filterName) for (FilterClass, filterName) in self.server.ParallelFiltersClasses]
         self.sequentialFilters = [FilterClass(filterName) for (FilterClass, filterName) in self.server.SequentialFiltersClasses]
@@ -123,11 +124,11 @@ class ServerHandler(SocketServer.BaseRequestHandler):
                                     if (notShutingDown):
                                         try:
                                             shutingDown = True
+                                            self.server.shutdown()
                                             logging.info("Task done, finishing clients and server... \nClient %d finished." % clientID)
                                             if (config["server"]["verbose"]): print "Task done, finishing clients and server... \nClient %d finished." % clientID
                                             for ID in clientsThreads.iterkeys(): 
                                                 if (ID != clientID): clientsThreads[ID][0].join()
-                                            self.server.shutdown()
                                             logging.info("Server finished." )
                                             if (config["server"]["verbose"]): print "Server finished."
                                         except: 
@@ -148,43 +149,26 @@ class ServerHandler(SocketServer.BaseRequestHandler):
                 elif (command == "DONE_ID"):
                     clientResourceKey = clientsInfo[clientID][2]
                     clientResourceID = clientsInfo[clientID][3]
-                    if (message["fail"]):
-                        persist.update(clientResourceKey, status["FAILED"], None)
-                        client.send({"command": "DONE_RET", "fail": False})
-                    else:
-                        insertErrors = []
-                        # If feedback is enabled, try to insert the new resources sent by the client
-                        if (config["global"]["feedback"]):
-                            clientNewResources = message["newresources"]
-                            for resource in clientNewResources:
-                                if (not persist.insert(resource[0], resource[1])):
-                                    insertErrors.append(str(resource[0]))
-                        # Report failed resource IDs in case of insertion errors            
-                        if (insertErrors):
-                            if (len(insertErrors) > 1): 
-                                logging.error("Failed to insert the new resources %s sent by client %s after collect resource %s." % (" and ".join((", ".join(insertErrors[:-1]), insertErrors[-1])), clientID, clientResourceID))
-                            else: 
-                                logging.error("Failed to insert the new resource %s sent by client %s after collect resource %s." % (insertErrors[0], clientID, clientResourceID))
-                            persist.update(clientResourceKey, status["FAILED"], None)
-                            client.send({"command": "DONE_RET", "fail": True, "inserterrors": insertErrors})
-                        # Report everything is OK    
-                        else: 
-                            clientResourceInfo = message["resourceinfo"]
-                            persist.update(clientResourceKey, status["SUCCEDED"], clientResourceInfo)
-                            client.send({"command": "DONE_RET", "fail": False})
+                    clientResourceInfo = message["resourceinfo"]
+                    # If feedback is enabled, insert new resources sent by the client
+                    if (config["global"]["feedback"]):
+                        clientNewResources = message["newresources"]
+                        for resource in clientNewResources: persist.insert(resource[0], resource[1])
+                    persist.update(clientResourceKey, status["SUCCEDED"], clientResourceInfo)
+                    client.send({"command": "DONE_RET"})
                             
-                elif (command == "ERROR"):
+                elif (command == "EXCEPTION"):
                     clientResourceKey = clientsInfo[clientID][2]
                     clientResourceID = clientsInfo[clientID][3]
-                    if (message["type"] == "critical"):
+                    if (message["type"] == "fail"):
+                        logging.warning("Client %s reported fail for resource %s." % (clientID, clientResourceID))
+                        persist.update(clientResourceKey, status["FAILED"], None)
+                        client.send({"command": "EXCEPTION_RET"})
+                    elif (message["type"] == "error"):
                         logging.error("Client %s reported critical error for resource %s. Connection closed." % (clientID, clientResourceID))
                         if (config["server"]["verbose"]): print "ERROR: Critical error on client %s, connection closed." % clientID
                         persist.update(clientResourceKey, status["ERROR"], None)
                         running = False
-                    elif (message["type"] == "cleanup"):
-                        logging.error("Client %s reported clean up error for resource %s." % (clientID, clientResourceID))
-                        persist.update(clientResourceKey, status["ERROR"], None)
-                        client.send({"command": "ERROR_RET"})
                     
                 elif (command == "GET_STATUS"):
                     # Clients status
@@ -252,11 +236,11 @@ class ServerHandler(SocketServer.BaseRequestHandler):
                     if (notShutingDown):
                         try:
                             shutingDown = True
+                            self.server.shutdown() 
                             logging.info("Removing all clients to shut down...")
                             if (config["server"]["verbose"]): print "Removing all clients to shut down..."
                             for ID in clientsInfo.keys(): self.removeClient(ID)
                             while (clientsInfo): pass
-                            self.server.shutdown()    
                             client.send({"command": "SD_RET", "fail": False})
                             logging.info("Server manually shut down.")
                             if (config["server"]["verbose"]): print "Server manually shut down."

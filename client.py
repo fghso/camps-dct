@@ -29,16 +29,6 @@ config = common.loadConfig(args.configFilePath)
 if (args.verbose is not None): config["client"]["verbose"] = args.verbose
 if (args.logging is not None): config["client"]["logging"] = args.logging
 
-# Define auxiliary funtions
-def ReportCleanUpError():
-    logging.exception("Exception while cleaning up, reporting error to server.")
-    server.send({"command": "ERROR", "type": "cleanup"})
-
-def ReportCriticalError(message):
-    logging.error(message)
-    if (config["client"]["verbose"]): print "ERROR: %s" % message
-    server.send({"command": "ERROR", "type": "critical"})
-
 # Get an instance of the crawler
 crawlerObject = crawler.Crawler()
 
@@ -77,47 +67,27 @@ while (True):
             filters = message["filters"]
             
             # Try to crawl the resource
-            try: crawlerResponse = crawlerObject.crawl(resourceID, filters)
-            except SystemExit: # If a SystemExit exception has been raised, abort execution
-                ReportCriticalError("SystemExit exception while crawling resource %s. Execution aborted." % resourceID)
+            try: 
+                crawlerResponse = crawlerObject.crawl(resourceID, filters)
+            # If a SystemExit exception has been raised, abort execution
+            except SystemExit: 
+                logging.exception("SystemExit exception while crawling resource %s. Execution aborted." % resourceID)
+                if (config["client"]["verbose"]): print "ERROR: SystemExit exception while crawling resource %s. Execution aborted." % resourceID
+                server.send({"command": "EXCEPTION", "type": "error"})
                 break
-            # If crawl fails, try to clean up
+            # If another type of exception has been raised, report fail
             except: 
-                logging.exception("Exception while crawling resource %s, cleaning up now." % resourceID)
-                try: crawlerObject.clean()
-                except SystemExit: 
-                    ReportCriticalError("SystemExit exception while cleaning up. Execution aborted.")
-                    break
-                # If clean up fails, report error
-                except: ReportCleanUpError()
-                else: server.send({"command": "DONE_ID", "fail": True})
+                logging.exception("Exception while crawling resource %s." % resourceID)
+                server.send({"command": "EXCEPTION", "type": "fail"})
             # If everything is ok, tell server that the collection of the resource has been finished. 
             # If feedback is enabled, also send the new resources to server
             else:
-                if (config["global"]["feedback"]): server.send({"command": "DONE_ID", "fail": False, "resourceinfo": crawlerResponse[0], "newresources": crawlerResponse[1]})
-                else: server.send({"command": "DONE_ID", "fail": False, "resourceinfo": crawlerResponse[0]})
+                if (config["global"]["feedback"]): server.send({"command": "DONE_ID", "resourceinfo": crawlerResponse[0], "newresources": crawlerResponse[1]})
+                else: server.send({"command": "DONE_ID", "resourceinfo": crawlerResponse[0]})
             
-        elif (command == "DONE_RET"):
-            if (message["fail"]):
-                insertErrors = message["inserterrors"]
-                if (len(insertErrors) > 1): 
-                    logging.error("Failed to insert the new resources %s after collect resource %s, cleaning up now." % (" and ".join((", ".join(insertErrors[:-1]), insertErrors[-1])), resourceID))
-                else: 
-                    logging.error("Failed to insert the new resource %s after collect resource %s, cleaning up now." % (insertErrors[0], resourceID))
-                # Try to clean up
-                try: crawlerObject.clean()
-                except SystemExit: # If a SystemExit exception has been raised, abort execution
-                    ReportCriticalError("SystemExit exception while cleaning up. Execution aborted.")
-                    break
-                # If clean up fails, report error
-                except: ReportCleanUpError()
-                else: server.send({"command": "DONE_ID", "fail": True})
-            else:
-                server.send({"command": "GET_ID"})
-            
-        elif (command == "ERROR_RET"):
+        elif (command == "DONE_RET") or (command == "EXCEPTION_RET"):
             server.send({"command": "GET_ID"})
-                
+            
         elif (command == "FINISH"):
             logging.info("Task done, client finished.")
             if (config["client"]["verbose"]): print "Task done, client finished."

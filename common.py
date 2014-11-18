@@ -20,7 +20,7 @@ class NetworkHandler():
         
     def getaddress(self):
         #return (socket.gethostbyaddr(self.sock.getpeername()[0])[0], self.sock.getpeername()[1])
-        return (socket.gethostbyaddr(self.sock.getpeername()[0])[0],) + self.sock.getpeername()
+        return (socket.gethostbyaddr(self.sock.getpeername()[0])[0].split(".")[0],) + self.sock.getpeername()
         
     def send(self, message):
         strMsg = json.dumps(message)
