@@ -1,6 +1,7 @@
 # -*- coding: iso-8859-1 -*-
 
 import threading
+import json
 import logging
 import common
 from collections import deque
@@ -25,6 +26,7 @@ class BasePersistenceHandler():
     def reset(self, status): return 0 # Return the number of resources reseted
     def close(self): pass
         
+        
 # This class was built as basis for FilePersistenceHandler and for test purposes. 
 # It is not intended for direct use in a production enviroment
 class MemoryPersistenceHandler(BasePersistenceHandler):
@@ -41,15 +43,19 @@ class MemoryPersistenceHandler(BasePersistenceHandler):
         self._extractConfig(configurationsDictionary)
         with self.loadResourcesLock:
             if (not self.resources):
-                for resource in self.selectConfig["resource"]:
-                    status = int(resource["status"])
-                    if "resourceinfo" not in resource: resource["resourceinfo"] = None
-                    self.resources.append({"id": int(resource["id"]), "status": status, "info": resource["resourceinfo"]})
-                    if (status == self.statusCodes["SUCCEDED"]): self.statusRecords[self.statusCodes["SUCCEDED"]] += 1
-                    else: self.statusRecords[status].append(len(self.resources) - 1)
+                # Some data for tests
+                self.resources.extend([
+                    {"id": 1, "status": 0, "info": {"crawler_name": "c1", "response_code": 3}},
+                    {"id": 2, "status": 0, "info": {"crawler_name": "c2", "response_code": 3}},
+                    {"id": 3, "status": 0, "info": None},
+                    {"id": 4, "status": 0, "info": None}
+                ])
+                for pk, resource in enumerate(self.resources):
+                    if (resource["status"] == self.statusCodes["SUCCEDED"]): self.statusRecords[self.statusCodes["SUCCEDED"]] += 1
+                    else: self.statusRecords[resource["status"]].append(pk)
                     if (self.config["uniqueresourceid"]): 
-                        if not (resource["id"] in self.IDsHash): self.IDsHash[resource["id"]] = len(self.resources) - 1
-                        else: raise KeyError("Resource ID %s already exists." % resource["id"])
+                        if not (resource["id"] in self.IDsHash): self.IDsHash[resource["id"]] = pk
+                        else: raise KeyError("Duplicated ID found in resources list: %s." % resource["id"])
             
     def _extractConfig(self, configurationsDictionary):
         # Global
@@ -57,12 +63,6 @@ class MemoryPersistenceHandler(BasePersistenceHandler):
         
         if ("uniqueresourceid" not in self.config): self.config["uniqueresourceid"] = False
         else: self.config["uniqueresourceid"] = common.str2bool(self.config["uniqueresourceid"])
-    
-        # Select
-        self.selectConfig = configurationsDictionary["select"]
-        
-        if ("resource" not in self.selectConfig): self.selectConfig["resource"] = []
-        elif (not isinstance(self.selectConfig["resource"], list)): self.selectConfig["resource"] = [self.selectConfig["resource"]]
     
         # Insert
         if ("insert" not in configurationsDictionary): self.insertConfig = {}
@@ -91,11 +91,12 @@ class MemoryPersistenceHandler(BasePersistenceHandler):
                 if (self.insertConfig["ondupkeyupdate"]): 
                     self.resources[self.IDsHash[resourceID]]["info"] = resourceInfo
                     return
-                else: raise KeyError("Resource ID %s already exists." % resourceID)
+                else: raise KeyError("Cannot insert resource, ID %s already exists." % resourceID)
         self.resources.append({"id": resourceID, "status": self.statusCodes["AVAILABLE"], "info": resourceInfo})
         self.statusRecords[self.statusCodes["AVAILABLE"]].append(len(self.resources) - 1)
         if (self.config["uniqueresourceid"]): self.IDsHash[resourceID] = len(self.resources) - 1
-        print self.resources
+        for rsc in self.resources: print rsc
+        print self.statusRecords[0]
         
     def count(self): 
         return (len(self.resources), 
@@ -114,7 +115,43 @@ class MemoryPersistenceHandler(BasePersistenceHandler):
         self.statusRecords[status].clear()
             
         return resetedCount
-
+        
+        
+class FilePersistenceHandler(MemoryPersistenceHandler):
+    def __init__(self, configurationsDictionary): 
+        self._extractConfig(configurationsDictionary)
+        with self.loadResourcesLock:
+            if (not self.resources):
+                with open(self.selectConfig["filename"], "r") as resourcesFile: resourcesList = json.load(resourcesFile)
+                for resource in resourcesList:
+                    self.resources.append(resource)
+                    if ("info" not in resource): resource["info"] = None
+                    if (resource["status"] == self.statusCodes["SUCCEDED"]): self.statusRecords[self.statusCodes["SUCCEDED"]] += 1
+                    else: self.statusRecords[resource["status"]].append(len(self.resources) - 1)
+                    if (self.config["uniqueresourceid"]): 
+                        if not (resource["id"] in self.IDsHash): self.IDsHash[resource["id"]] = len(self.resources) - 1
+                        else: raise KeyError("Duplicated ID found in resources file: %s." % resource["id"])
+            
+    def _extractConfig(self, configurationsDictionary):
+        # Global
+        self.config = configurationsDictionary
+        
+        if ("uniqueresourceid" not in self.config): self.config["uniqueresourceid"] = False
+        else: self.config["uniqueresourceid"] = common.str2bool(self.config["uniqueresourceid"])
+    
+        # Select
+        self.selectConfig = configurationsDictionary["select"]
+    
+        # Insert
+        if ("insert" not in configurationsDictionary): self.insertConfig = {}
+        else: self.insertConfig = configurationsDictionary["insert"]
+        
+        if ("filename" not in self.insertConfig): self.insertConfig["filename"] = self.selectConfig["filename"]
+    
+        if ("ondupkeyupdate" not in self.insertConfig): self.insertConfig["ondupkeyupdate"] = False
+        else: self.insertConfig["ondupkeyupdate"] = common.str2bool(self.insertConfig["ondupkeyupdate"])
+    
+    
 class MySQLPersistenceHandler(BasePersistenceHandler):
     def __init__(self, configurationsDictionary):
         self._extractConfig(configurationsDictionary)
@@ -124,8 +161,8 @@ class MySQLPersistenceHandler(BasePersistenceHandler):
         self.selectConfig = configurationsDictionary["select"]
     
         # Set default values
-        if ("resourceinfo" not in self.selectConfig): self.selectConfig["resourceinfo"] = []
-        elif (not isinstance(self.selectConfig["resourceinfo"], list)): self.selectConfig["resourceinfo"] = [self.selectConfig["resourceinfo"]]
+        if ("infocolumn" not in self.selectConfig): self.selectConfig["infocolumn"] = []
+        elif (not isinstance(self.selectConfig["infocolumn"], list)): self.selectConfig["infocolumn"] = [self.selectConfig["infocolumn"]]
         
         if ("insert" not in configurationsDictionary): self.insertConfig = self.selectConfig
         else: self.insertConfig = configurationsDictionary["insert"]
@@ -140,12 +177,12 @@ class MySQLPersistenceHandler(BasePersistenceHandler):
         
     def select(self):
         cursor = self.mysqlConnection.cursor()
-        query = "SELECT " + ", ".join(["resources_pk", "resource_id"] + self.selectConfig["resourceinfo"]) + " FROM " + self.selectConfig["table"] + " WHERE status = %s ORDER BY resources_pk LIMIT 1"
+        query = "SELECT " + ", ".join(["resources_pk", "resource_id"] + self.selectConfig["infocolumn"]) + " FROM " + self.selectConfig["table"] + " WHERE status = %s ORDER BY resources_pk LIMIT 1"
         cursor.execute(query, (self.statusCodes["AVAILABLE"],))
         resource = cursor.fetchone()
         self.mysqlConnection.commit()
         cursor.close()
-        if (resource): return (resource[0], resource[1], dict(zip(self.selectConfig["resourceinfo"], resource[2:])))
+        if (resource): return (resource[0], resource[1], dict(zip(self.selectConfig["infocolumn"], resource[2:])))
         else: return (None, None, None)
         
     def update(self, resourceKey, status, resourceInfo):
