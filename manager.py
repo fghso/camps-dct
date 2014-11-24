@@ -168,12 +168,12 @@ else:
         resourcesErrorPercent = ((resourcesError / resourcesTotal) * 100) if (resourcesTotal > 0) else 0.0
         resourcesProcessedPercent = ((resourcesProcessed / resourcesTotal) * 100) if (resourcesTotal > 0) else 0.0
         status += "    Total number of resources: %d\n" % resourcesTotal
-        status += "    Number of resources processed: %d (%.2f%%)\n" % (resourcesProcessed, resourcesProcessedPercent)
-        status += "      Succeeded: %d (%.2f%%)\n" % (resourcesSucceeded, resourcesSucceededPercent)
-        status += "      In Progress: %d (%.2f%%)\n" % (resourcesInProgress, resourcesInProgressPercent)
-        status += "      Available: %d (%.2f%%)\n" % (resourcesAvailable, resourcesAvailablePercent)
-        status += "      Failed: %d (%.2f%%)\n" % (resourcesFailed, resourcesFailedPercent)
-        status += "      Error: %d (%.2f%%)\n" % (resourcesError, resourcesErrorPercent)
+        status += "    Number of resources processed: %d (%.5f%%)\n" % (resourcesProcessed, resourcesProcessedPercent)
+        status += "      Succeeded: %d (%.5f%%)\n" % (resourcesSucceeded, resourcesSucceededPercent)
+        status += "      In Progress: %d (%.5f%%)\n" % (resourcesInProgress, resourcesInProgressPercent)
+        status += "      Available: %d (%.5f%%)\n" % (resourcesAvailable, resourcesAvailablePercent)
+        status += "      Failed: %d (%.5f%%)\n" % (resourcesFailed, resourcesFailedPercent)
+        status += "      Error: %d (%.5f%%)\n" % (resourcesError, resourcesErrorPercent)
         status += "\n" + (" Status ").center(50, ':') + "\n"
     # Basic status
     else:
@@ -195,7 +195,7 @@ else:
         resourcesTotal = float(serverStatus["counts"]["total"])
         resourcesProcessed = float(serverStatus["counts"]["succeeded"] + serverStatus["counts"]["failed"] + serverStatus["counts"]["error"])
         resourcesProcessedPercent = ((resourcesProcessed / resourcesTotal) * 100) if (resourcesTotal > 0) else 0.0
-        status += "\n" + (" Status (%.2f%% completed) " % resourcesProcessedPercent).center(50, ':') + "\n"
+        status += "\n" + (" Status (%.5f%% completed) " % resourcesProcessedPercent).center(50, ':') + "\n"
 
     print status
     

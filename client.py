@@ -29,24 +29,25 @@ config = common.loadConfig(args.configFilePath)
 if (args.verbose is not None): config["client"]["verbose"] = args.verbose
 if (args.logging is not None): config["client"]["logging"] = args.logging
 
-# Get an instance of the crawler
-crawlerObject = crawler.Crawler()
-
 # Get client ID
 processID = os.getpid()
 server = common.NetworkHandler()
 server.connect(config["global"]["connection"]["address"], config["global"]["connection"]["port"])
 server.send({"command": "GET_LOGIN", "processid": processID})
 message = server.recv()
-clientID = message["clientid"]
+if (message["fail"]): sys.exit("ERROR: %s" % message["reason"])
+else: clientID = message["clientid"]
 
 # Configure logging
 if (config["client"]["logging"]):
     logging.basicConfig(format="%(asctime)s %(module)s %(levelname)s: %(message)s", datefmt="%d/%m/%Y %H:%M:%S", 
-                        filename="client%s[%s%s].log" % (clientID, socket.gethostname(), config["global"]["connection"]["port"]), filemode="w", level=logging.DEBUG)
+                        filename="client%s[%s%s].log" % (clientID, socket.gethostname(), config["global"]["connection"]["port"]), filemode="w", level=logging.INFO)
 
 logging.info("Connected to server with ID %s " % clientID)
 if (config["client"]["verbose"]): print "Connected to server with ID %s " % clientID
+
+# Get an instance of the crawler
+crawlerObject = crawler.Crawler()
 
 # Execute collection
 server.send({"command": "GET_ID"})

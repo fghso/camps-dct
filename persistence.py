@@ -18,13 +18,14 @@ class BasePersistenceHandler():
                    "FAILED":    -1,
                    "ERROR":     -2}
 
-    def __init__(self, configurationsDictionary): pass # Receives everything in handler section of the XML configurations file
+    def __init__(self, configurationsDictionary): pass # Receives a copy of everything in handler section of the XML configuration file
     def select(self): return (None, None, None) # Return a tuple: (resource unique key, resource id, resource info dictionary)
     def update(self, resourceKey, status, resourceInfo): pass
-    def insert(self, resourceID, resourceInfo): pass
+    def insert(self, resourcesList): pass # Receives a list of tuples: [(resource id, resource info dictionary), ...]
     def count(self): return (0, 0, 0, 0, 0, 0) # Return a tuple: (total, succeeded, inprogress, available, failed, error)
     def reset(self, status): return 0 # Return the number of resources reseted
-    def close(self): pass
+    def close(self): pass # Called when a connection to a client is finished
+    def shutdown(self): pass # Called when server is shut down, allowing to free shared resources
         
         
 # This class was built as basis for FilePersistenceHandler and for test purposes. 
@@ -32,6 +33,7 @@ class BasePersistenceHandler():
 class MemoryPersistenceHandler(BasePersistenceHandler):
     loadResourcesLock = threading.Lock()
     resources = []
+    insertedResources = []
     IDsHash = {}
     statusRecords = {BasePersistenceHandler.statusCodes["SUCCEDED"]:   0,
                      BasePersistenceHandler.statusCodes["INPROGRESS"]: deque(),
@@ -54,22 +56,20 @@ class MemoryPersistenceHandler(BasePersistenceHandler):
                     if (resource["status"] == self.statusCodes["SUCCEDED"]): self.statusRecords[self.statusCodes["SUCCEDED"]] += 1
                     else: self.statusRecords[resource["status"]].append(pk)
                     if (self.config["uniqueresourceid"]): 
-                        if not (resource["id"] in self.IDsHash): self.IDsHash[resource["id"]] = pk
+                        if (resource["id"] not in self.IDsHash): self.IDsHash[resource["id"]] = (self.resources, pk)
                         else: raise KeyError("Duplicated ID found in resources list: %s." % resource["id"])
             
     def _extractConfig(self, configurationsDictionary):
-        # Global
         self.config = configurationsDictionary
         
         if ("uniqueresourceid" not in self.config): self.config["uniqueresourceid"] = False
         else: self.config["uniqueresourceid"] = common.str2bool(self.config["uniqueresourceid"])
     
-        # Insert
-        if ("insert" not in configurationsDictionary): self.insertConfig = {}
-        else: self.insertConfig = configurationsDictionary["insert"]
-    
-        if ("ondupkeyupdate" not in self.insertConfig): self.insertConfig["ondupkeyupdate"] = False
-        else: self.insertConfig["ondupkeyupdate"] = common.str2bool(self.insertConfig["ondupkeyupdate"])
+        if ("ondupkeyupdate" not in self.config): self.config["ondupkeyupdate"] = False
+        else: self.config["ondupkeyupdate"] = common.str2bool(self.config["ondupkeyupdate"])
+        
+        if ("separateinsertlist" not in self.config): self.config["separateinsertlist"] = False
+        else: self.config["separateinsertlist"] = common.str2bool(self.config["separateinsertlist"])
     
     def select(self): 
         if (self.statusRecords[self.statusCodes["AVAILABLE"]]): 
@@ -85,18 +85,21 @@ class MemoryPersistenceHandler(BasePersistenceHandler):
         if (status == self.statusCodes["SUCCEDED"]): self.statusRecords[self.statusCodes["SUCCEDED"]] += 1
         else: self.statusRecords[status].append(resourceKey)
         
-    def insert(self, resourceID, resourceInfo): 
-        if (self.config["uniqueresourceid"]):
-            if (resourceID in self.IDsHash):
-                if (self.insertConfig["ondupkeyupdate"]): 
-                    self.resources[self.IDsHash[resourceID]]["info"] = resourceInfo
-                    return
-                else: raise KeyError("Cannot insert resource, ID %s already exists." % resourceID)
-        self.resources.append({"id": resourceID, "status": self.statusCodes["AVAILABLE"], "info": resourceInfo})
-        self.statusRecords[self.statusCodes["AVAILABLE"]].append(len(self.resources) - 1)
-        if (self.config["uniqueresourceid"]): self.IDsHash[resourceID] = len(self.resources) - 1
-        for rsc in self.resources: print rsc
-        print self.statusRecords[0]
+    def insert(self, resourcesList): 
+        insertList = []
+        if (self.config["separateinsertlist"]): insertList = self.insertedResources
+        else: insertList = self.resources
+        for resourceID, resourceInfo in resourcesList:
+            if (self.config["uniqueresourceid"]):
+                if (resourceID in self.IDsHash):
+                    updateList, pk = self.IDsHash[resourceID]
+                    if (self.config["ondupkeyupdate"]): 
+                        updateList[pk]["info"] = resourceInfo
+                        continue
+                    else: raise KeyError("Cannot insert resource, ID %s already exists." % resourceID)
+                self.IDsHash[resourceID] = (insertList, len(insertList))
+            if (not self.config["separateinsertlist"]): self.statusRecords[self.statusCodes["AVAILABLE"]].append(len(insertList))
+            insertList.append({"id": resourceID, "status": self.statusCodes["AVAILABLE"], "info": resourceInfo})
         
     def count(self): 
         return (len(self.resources), 
@@ -118,62 +121,85 @@ class MemoryPersistenceHandler(BasePersistenceHandler):
         
         
 class FilePersistenceHandler(MemoryPersistenceHandler):
+    saveLock = threading.Lock()
+    lastSaveTime = None
+
     def __init__(self, configurationsDictionary): 
         self._extractConfig(configurationsDictionary)
         with self.loadResourcesLock:
             if (not self.resources):
-                with open(self.selectConfig["filename"], "r") as resourcesFile: resourcesList = json.load(resourcesFile)
+                with open(self.config["selectfilename"], "r") as resourcesFile: resourcesList = json.load(resourcesFile)
                 for resource in resourcesList:
                     self.resources.append(resource)
                     if ("info" not in resource): resource["info"] = None
                     if (resource["status"] == self.statusCodes["SUCCEDED"]): self.statusRecords[self.statusCodes["SUCCEDED"]] += 1
                     else: self.statusRecords[resource["status"]].append(len(self.resources) - 1)
                     if (self.config["uniqueresourceid"]): 
-                        if not (resource["id"] in self.IDsHash): self.IDsHash[resource["id"]] = len(self.resources) - 1
+                        if (resource["id"] not in self.IDsHash): self.IDsHash[resource["id"]] = len(self.resources) - 1
                         else: raise KeyError("Duplicated ID found in resources file: %s." % resource["id"])
             
     def _extractConfig(self, configurationsDictionary):
-        # Global
         self.config = configurationsDictionary
         
         if ("uniqueresourceid" not in self.config): self.config["uniqueresourceid"] = False
         else: self.config["uniqueresourceid"] = common.str2bool(self.config["uniqueresourceid"])
     
-        # Select
-        self.selectConfig = configurationsDictionary["select"]
-    
-        # Insert
-        if ("insert" not in configurationsDictionary): self.insertConfig = {}
-        else: self.insertConfig = configurationsDictionary["insert"]
+        if ("ondupkeyupdate" not in self.config): self.config["ondupkeyupdate"] = False
+        else: self.config["ondupkeyupdate"] = common.str2bool(self.config["ondupkeyupdate"])
         
-        if ("filename" not in self.insertConfig): self.insertConfig["filename"] = self.selectConfig["filename"]
-    
-        if ("ondupkeyupdate" not in self.insertConfig): self.insertConfig["ondupkeyupdate"] = False
-        else: self.insertConfig["ondupkeyupdate"] = common.str2bool(self.insertConfig["ondupkeyupdate"])
-    
-    
+        if ("insertfilename" not in self.config): self.config["insertfilename"] = self.config["selectfilename"]
+        
+        if ("savetimedelta" not in self.config) or (int(self.config["savetimedelta"]) < 1): self.config["savetimedelta"] = 60
+        else: self.config["savetimedelta"] = int(self.config["savetimedelta"])
+        
+    # def update(self, resourceKey, status, resourceInfo): 
+        # resource = self.resources[resourceKey]
+        # self.statusRecords[resource["status"]].remove(resourceKey)
+        # if (status == self.statusCodes["SUCCEDED"]): self.statusRecords[self.statusCodes["SUCCEDED"]] += 1
+        # else: self.statusRecords[status].append(resourceKey)
+        # with self.saveLock:
+            # resource["status"] = status
+            # if (resourceInfo): resource["info"] = resourceInfo
+            # if (not FilePersistenceHandler.lastSaveTime): FilePersistenceHandler.lastSaveTime = datetime.now()
+            # elapsedTime = datetime.now() - FilePersistenceHandler.lastSaveTime
+            # if (elapsedTime.seconds >= self.config["savetimedelta"]):
+                # with open(self.config["selectfilename"], "w") as resourcesFile: json.dump(self.resources, resourcesFile)
+                # FilePersistenceHandler.lastSaveTime = datetime.now()
+        
+    # def insert(self, resourcesList): 
+        # for rsc in self.resources: print rsc
+        # print self.statusRecords[0]
+        # for rsc in self.insertedResources: print rsc
+        # print ""
+
+    def shutdown(self): print "desligando"
+        
+        
 class MySQLPersistenceHandler(BasePersistenceHandler):
     def __init__(self, configurationsDictionary):
         self._extractConfig(configurationsDictionary)
         self.mysqlConnection = mysql.connector.connect(user=self.selectConfig["user"], password=self.selectConfig["password"], host=self.selectConfig["host"], database=self.selectConfig["name"])
                 
     def _extractConfig(self, configurationsDictionary):
+        self.config = configurationsDictionary
         self.selectConfig = configurationsDictionary["select"]
-    
-        # Set default values
-        if ("infocolumn" not in self.selectConfig): self.selectConfig["infocolumn"] = []
-        elif (not isinstance(self.selectConfig["infocolumn"], list)): self.selectConfig["infocolumn"] = [self.selectConfig["infocolumn"]]
-        
         if ("insert" not in configurationsDictionary): self.insertConfig = self.selectConfig
         else: self.insertConfig = configurationsDictionary["insert"]
+    
+        # Set default values
+        if ("ondupkeyupdate" not in self.config): self.config["ondupkeyupdate"] = False
+        else: self.config["ondupkeyupdate"] = common.str2bool(self.config["ondupkeyupdate"])
+        
+        if ("infocolumn" not in self.selectConfig): self.selectConfig["infocolumn"] = []
+        elif (not isinstance(self.selectConfig["infocolumn"], list)): self.selectConfig["infocolumn"] = [self.selectConfig["infocolumn"]]
         
         if ("user" not in self.insertConfig): self.insertConfig["user"] = self.selectConfig["user"]
         if ("password" not in self.insertConfig): self.insertConfig["password"] = self.selectConfig["password"]
         if ("host" not in self.insertConfig): self.insertConfig["host"] = self.selectConfig["host"]
         if ("name" not in self.insertConfig): self.insertConfig["name"] = self.selectConfig["name"]
         if ("table" not in self.insertConfig): self.insertConfig["table"] = self.selectConfig["table"]
-        if ("ondupkeyupdate" not in self.insertConfig): self.insertConfig["ondupkeyupdate"] = False
-        else: self.insertConfig["ondupkeyupdate"] = common.str2bool(self.insertConfig["ondupkeyupdate"])
+        if ("infocolumn" not in self.insertConfig): self.insertConfig["infocolumn"] = self.selectConfig["infocolumn"]
+        elif (not isinstance(self.insertConfig["infocolumn"], list)): self.insertConfig["infocolumn"] = [self.insertConfig["infocolumn"]]
         
     def select(self):
         cursor = self.mysqlConnection.cursor()
@@ -196,19 +222,29 @@ class MySQLPersistenceHandler(BasePersistenceHandler):
         self.mysqlConnection.commit()
         cursor.close()
         
-    def insert(self, resourceID, resourceInfo):
+    def insert(self, resourcesList):
         cursor = self.mysqlConnection.cursor()
-        if (not resourceInfo):
-            query = "INSERT INTO " + self.insertConfig["table"] + " (resource_id) VALUES (%s)"
-            if (self.insertConfig["ondupkeyupdate"]): query += " ON DUPLICATE KEY UPDATE resource_id = VALUES(resource_id)"
-            cursor.execute(query, (resourceID,))
-            self.mysqlConnection.commit()
-        else:
-            query = "INSERT INTO " + self.insertConfig["table"] + " (" + ", ".join(["resource_id"] + resourceInfo.keys()) + ") VALUES (" + ", ".join(["%s"] + (["%s"] * len(resourceInfo))) + ")"
-            if (self.insertConfig["ondupkeyupdate"]):
-                query += " ON DUPLICATE KEY UPDATE resource_id = VALUES(resource_id), " + ", ".join(["{0} = VALUES({0})".format(key) for key in resourceInfo.keys()])
-            cursor.execute(query, (resourceID,) + tuple(resourceInfo.values()))
-            self.mysqlConnection.commit()
+        query = "INSERT INTO " + self.insertConfig["table"] + " (" + ", ".join(["resource_id"] + self.insertConfig["infocolumn"]) + ") VALUES "
+        
+        data = []
+        values = []
+        for resourceID, resourceInfo in resourcesList: 
+            resourceValues = [str(resourceID)]
+            if (not resourceInfo): resourceInfo = {}
+            for column in self.insertConfig["infocolumn"]:
+                if (column in resourceInfo): 
+                    resourceValues.append("%s")
+                    data.append(resourceInfo[column])
+                else: resourceValues.append("DEFAULT")
+            values.append("(" + ", ".join(resourceValues) + ")") 
+            
+        query += ", ".join(values)
+        if (self.config["ondupkeyupdate"]):
+            query += " ON DUPLICATE KEY UPDATE resource_id = VALUES(resource_id), " + ", ".join(["{0} = VALUES({0})".format(column) for column in self.insertConfig["infocolumn"]])
+            column 
+        
+        cursor.execute(query, data)
+        self.mysqlConnection.commit()        
         cursor.close()
         
     def count(self):

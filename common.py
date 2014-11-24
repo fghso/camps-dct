@@ -69,13 +69,6 @@ def loadConfig(configFilePath):
     # Connection
     config["global"]["connection"]["port"] = int(config["global"]["connection"]["port"])
 
-    # Persistence
-    if (isinstance(config["persistence"]["handler"], list)): 
-        for handler in config["persistence"]["handler"]:
-            if str2bool(handler["enable"]):
-                config["persistence"]["handler"] = handler
-                break
-
     # Global default values
     if ("feedback" not in config["global"]): config["global"]["feedback"] = False
     else: config["global"]["feedback"] = str2bool(config["global"]["feedback"])
@@ -96,7 +89,6 @@ def loadConfig(configFilePath):
     elif (not isinstance(config["server"]["filter"], list)): config["server"]["filter"] = [config["server"]["filter"]]
     
     for filter in config["server"]["filter"]:
-        filter["enable"] = str2bool(filter["enable"])
         if ("name" not in filter): filter["name"] = None
         if ("parallel" not in filter): filter["parallel"] = False
         else: filter["parallel"] = str2bool(filter["parallel"]) 
@@ -109,6 +101,10 @@ def loadConfig(configFilePath):
     
     if ("verbose" not in config["client"]): config["client"]["verbose"] = False
     else: config["client"]["verbose"] = str2bool(config["client"]["verbose"])
+    
+    # Persistence
+    if (isinstance(config["persistence"]["handler"], list)): 
+        config["persistence"]["handler"] = config["persistence"]["handler"][0]
     
     return config
     
