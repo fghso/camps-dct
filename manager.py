@@ -152,7 +152,7 @@ else:
         status += "      Connected clients: %d (%.2f%%)\n" % (connectedClients, connectedClientsPercent)
         status += "      Disconnected clients: %d (%.2f%%)\n" % (disconnectedClients, disconnectedClientsPercent)
         status += "      Clients being removed: %d (%.2f%%)\n" % (removingClients, removingClientsPercent)
-        status += "    Sum of resources processed: %d\n" % sum([clientStatus["amount"] for clientStatus in clientsStatusList])
+        status += "    Number of resources processed: %d\n" % sum([clientStatus["amount"] for clientStatus in clientsStatusList])
         status += "\n  " + (" Global Info ").center(46, '=') + "\n\n"
         resourcesTotal = float(serverStatus["counts"]["total"])
         resourcesSucceeded = float(serverStatus["counts"]["succeeded"])
