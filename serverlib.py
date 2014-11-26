@@ -33,7 +33,7 @@ nextFreeID = 1
 shutingDownFlag = False
 
 # Define synchronization objects for critical regions of the code
-nextFreeIDLock = threading.Lock()
+getLoginLock = threading.Lock()
 getIDLock = threading.Lock()
 removeClientLock = threading.Lock()
 clientRemovedCondition = threading.Condition()
@@ -85,12 +85,13 @@ class ServerHandler(SocketServer.BaseRequestHandler):
                 command = message["command"]
                 
                 if (command == "GET_LOGIN"):
-                    notShutingDown = shutdownLock.acquire(False)
-                    if (notShutingDown): 
-                        shutdownLock.release()
-                        with nextFreeIDLock:
+                    with getLoginLock:
+                        notShutingDown = shutdownLock.acquire(False)
+                        if (notShutingDown): 
+                            shutdownLock.release()
                             clientID = nextFreeID
                             nextFreeID += 1
+                    if (notShutingDown):                            
                         clientAddress = client.getaddress()
                         clientPid = message["processid"]
                         clientsInfo[clientID] = [clientAddress, clientPid, None, None, -1, datetime.now(), None]
@@ -284,9 +285,13 @@ class ServerHandler(SocketServer.BaseRequestHandler):
         if (notShutingDown): 
             shutdownLock.release()
         elif (threading.active_count() == 2):
+            logging.info("Freeing allocated objects...")
+            if (self.server.config["server"]["verbose"]): print "Freeing allocated objects..."
             self.persist.shutdown()
             for filter in self.parallelFilters: filter.shutdown()
             for filter in self.sequentialFilters: filter.shutdown()
+            logging.info("Done.")
+            if (self.server.config["server"]["verbose"]): print "Done."
         
     def removeClient(self, ID):
         with removeClientLock:

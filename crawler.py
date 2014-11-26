@@ -20,7 +20,7 @@ class Crawler:
         print "Resource received: %s" % resourceID        
         print "Filters: %s" % filters
         
-        sleepTime = 10
+        sleepTime = 30
         print "Sleeping for %d seconds..." % sleepTime
         time.sleep(sleepTime)
         print "Awaked!\n"
