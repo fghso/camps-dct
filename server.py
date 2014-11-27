@@ -26,7 +26,7 @@ config = common.loadConfig(args.configFilePath)
 if (args.verbose is not None): config["server"]["verbose"] = args.verbose
 if (args.logging is not None): config["server"]["logging"] = args.logging
 
-# Start server
+# Run server
 server = serverlib.ThreadedTCPServer(config)
-server.start()
+server.run()
                 

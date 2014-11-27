@@ -90,13 +90,16 @@ while (True):
             server.send({"command": "GET_ID"})
             
         elif (command == "FINISH"):
-            logging.info("Task done, client finished.")
-            if (config["client"]["verbose"]): print "Task done, client finished."
-            break
-            
-        elif (command == "KILL"):
-            logging.info("Client removed by the server.")
-            if (config["client"]["verbose"]): print "Client removed by the server."
+            reason = message["reason"]
+            if (reason == "task done"):
+                logging.info("Task done, client finished.")
+                if (config["client"]["verbose"]): print "Task done, client finished."
+            elif (reason == "shut down"):
+                logging.info("Server shuting down, client finished.")
+                if (config["client"]["verbose"]): print "Server shuting down, client finished."
+            else: 
+                logging.info("Client manually removed.")
+                if (config["client"]["verbose"]): print "Client manually removed."
             break
             
     except Exception as error:

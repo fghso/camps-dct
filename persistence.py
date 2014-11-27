@@ -91,6 +91,7 @@ class MemoryPersistenceHandler(BasePersistenceHandler):
                 pk = MemoryPersistenceHandler.nextAvailable
                 while (self.resources[pk]["status"] != self.statusCodes["AVAILABLE"]): pk += 1
                 resource = (pk, self.resources[pk]["id"], deepcopy(self.resources[pk]["info"]))
+        print self.resources
         return resource
     
     def update(self, resourceKey, status, resourceInfo): 

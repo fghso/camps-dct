@@ -29,11 +29,7 @@ clientsThreads = {}
 # Define the next ID to give to a new client
 nextFreeID = 1
 
-# Flag to report wheter the server is running or not when current status is requested
-shutingDownFlag = False
-
 # Define synchronization objects for critical regions of the code
-getLoginLock = threading.Lock()
 getIDLock = threading.Lock()
 removeClientLock = threading.Lock()
 clientRemovedCondition = threading.Condition()
@@ -56,9 +52,8 @@ class ServerHandler(SocketServer.BaseRequestHandler):
             else: self.sequentialFilters.append(FilterClass(filterOptions))
 
     def handle(self):
-        # Declare global variables
+        # Declare global variable
         global nextFreeID
-        global shutingDownFlag
     
         # Define some local variables
         config = self.server.config
@@ -85,23 +80,21 @@ class ServerHandler(SocketServer.BaseRequestHandler):
                 command = message["command"]
                 
                 if (command == "GET_LOGIN"):
-                    with getLoginLock:
-                        notShutingDown = shutdownLock.acquire(False)
-                        if (notShutingDown): 
-                            shutdownLock.release()
+                    clientAddress = client.getaddress()
+                    clientPid = message["processid"]
+                    with shutdownLock:
+                        if (self.server.state == "running"):
                             clientID = nextFreeID
                             nextFreeID += 1
-                    if (notShutingDown):                            
-                        clientAddress = client.getaddress()
-                        clientPid = message["processid"]
-                        clientsInfo[clientID] = [clientAddress, clientPid, None, None, -1, datetime.now(), None]
-                        clientsThreads[clientID] = (threading.current_thread(), threading.Event())
-                        client.send({"command": "GIVE_LOGIN", "fail": False, "clientid": clientID})
-                        logging.info("New client connected: %d" % clientID)
-                        if (config["server"]["verbose"]): print "New client connected: %d" % clientID
-                    else:
-                        client.send({"command": "GIVE_LOGIN", "fail": True, "reason": "Cannot connect, server is shuting down."})
-                        running = False
+                            clientsInfo[clientID] = [clientAddress, clientPid, None, None, -1, datetime.now(), None]
+                            clientsThreads[clientID] = (threading.current_thread(), threading.Event())
+                        else:
+                            client.send({"command": "GIVE_LOGIN", "fail": True, "reason": "Cannot connect, server is %s." % self.server.state})
+                            running = False
+                            continue
+                    client.send({"command": "GIVE_LOGIN", "fail": False, "clientid": clientID})
+                    logging.info("New client connected: %d" % clientID)
+                    if (config["server"]["verbose"]): print "New client connected: %d" % clientID
                 
                 elif (command == "GET_ID"):
                     clientStopEvent = clientsThreads[clientID][1]
@@ -129,37 +122,28 @@ class ServerHandler(SocketServer.BaseRequestHandler):
                                 if (config["server"]["loopforever"]): 
                                     time.sleep(5)
                                     tryagain = True
-                                # If there isn't resources available and loopforever is false, 
-                                # finish client and signal server to shut down
+                                # If there isn't resources available and loopforever is false, finish all clients
                                 else:
-                                    client.send({"command": "FINISH"})
-                                    del clientsInfo[clientID]
-                                    notShutingDown = shutdownLock.acquire(False)
-                                    if (notShutingDown):
-                                        try:
-                                            shutingDownFlag = True
-                                            logging.info("Task done, finishing clients and server... \nClient %d finished." % clientID)
-                                            if (config["server"]["verbose"]): print "Task done, finishing clients and server... \nClient %d finished." % clientID
-                                            for ID in clientsThreads.iterkeys(): 
-                                                clientsThreads[ID][1].set()
-                                                if (ID != clientID): clientsThreads[ID][0].join()
-                                            self.server.shutdown()
-                                            logging.info("Server finished." )
-                                            if (config["server"]["verbose"]): print "Server finished."
-                                        except: 
-                                            shutingDownFlag = False
-                                            shutdownLock.release()
-                                    else: 
-                                        logging.info("Client %d finished." % clientID)
-                                        if (config["server"]["verbose"]): print "Client %d finished." % clientID 
-                                    running = False
-                        # If the client has been removed, kill it
+                                    with shutdownLock: 
+                                        if (self.server.state == "running"): 
+                                            logging.info("Task done, finishing clients...")
+                                            if (config["server"]["verbose"]): print "Task done, finishing clients..."
+                                            self.server.state = "finishing"
+                                            for ID in clientsInfo.keys(): self.removeClient(ID)
+                                    tryagain = True
+                        # If the client has been removed, finish it
                         else:
-                            client.send({"command": "KILL"})
                             del clientsInfo[clientID]
                             with clientRemovedCondition: clientRemovedCondition.notify_all()
-                            logging.info("Client %d removed." % clientID)
-                            if (config["server"]["verbose"]): print "Client %d removed." % clientID
+                            if (self.server.state == "running"):
+                                client.send({"command": "FINISH", "reason": "removed"})
+                                logging.info("Client %d removed." % clientID)
+                                if (config["server"]["verbose"]): print "Client %d removed." % clientID
+                            else:
+                                if (self.server.state == "finishing"): client.send({"command": "FINISH", "reason": "task done"})
+                                if (self.server.state == "shuting down"): client.send({"command": "FINISH", "reason": "shut down"})
+                                logging.info("Client %d finished." % clientID)
+                                if (config["server"]["verbose"]): print "Client %d finished." % clientID 
                             running = False
                     
                 elif (command == "DONE_ID"):
@@ -200,7 +184,7 @@ class ServerHandler(SocketServer.BaseRequestHandler):
                     # Server status
                     serverStatus = {"pid": os.getpid()}
                     serverStatus["time"] = {"start": calendar.timegm(self.server.startTime.utctimetuple())}
-                    serverStatus["shutingdown"] = shutingDownFlag
+                    serverStatus["state"] = self.server.state
                     counts = persist.count()
                     serverStatus["counts"] = {"total": counts[0]}
                     serverStatus["counts"]["succeeded"] = counts[1]
@@ -244,27 +228,19 @@ class ServerHandler(SocketServer.BaseRequestHandler):
                     running = False
                         
                 elif (command == "SHUTDOWN"):
-                    # Interrupt all active clients and mark resources requested by inactive 
-                    # clients as not collected. After that, shut down server
-                    notShutingDown = shutdownLock.acquire(False)
-                    if (notShutingDown):
-                        try:
-                            shutingDownFlag = True
-                            logging.info("Removing all clients to shut down...")
-                            if (config["server"]["verbose"]): print "Removing all clients to shut down..."
-                            for ID in clientsInfo.keys(): self.removeClient(ID)
-                            with clientRemovedCondition:
-                                while (clientsInfo): clientRemovedCondition.wait()
-                            self.server.shutdown() 
-                            client.send({"command": "SD_RET", "fail": False})
-                            logging.info("Server manually shut down.")
-                            if (config["server"]["verbose"]): print "Server manually shut down."
-                        except:
-                            shutingDownFlag = False
-                            shutdownLock.release()
-                    else:
-                        client.send({"command": "SD_RET", "fail": True, "reason": "Cannot perform action, server is already shuting down."})
                     running = False
+                    with shutdownLock:
+                        if (self.server.state == "running"): 
+                            self.server.state = "shuting down"
+                        else: 
+                            client.send({"command": "SD_RET", "fail": True, "reason": "Cannot perform action, server is %s." % ("already shuting down" if (self.server.state == "shuting down") else self.server.state)})
+                            continue
+                    logging.info("Finishing all clients to shut down...")
+                    if (config["server"]["verbose"]): print "Finishing all clients to shut down..."
+                    for ID in clientsInfo.keys(): self.removeClient(ID)
+                    with clientRemovedCondition:
+                        while (clientsInfo): clientRemovedCondition.wait()
+                    client.send({"command": "SD_RET", "fail": False})
                     
             except Exception as error:
                 logging.exception("Exception while processing a request from client %d. Execution of thread '%s' aborted." % (clientID, threading.current_thread().name))
@@ -280,18 +256,14 @@ class ServerHandler(SocketServer.BaseRequestHandler):
         for filter in self.parallelFilters: filter.close()
         for filter in self.sequentialFilters: filter.close()
         
-        # If this is the last thread finishing, free resources allocated by persistence and filters objects
-        notShutingDown = shutdownLock.acquire(False)
-        if (notShutingDown): 
-            shutdownLock.release()
-        elif (threading.active_count() == 2):
+        # If this is the last client finishing, free resources allocated by persistence and filters objects
+        if (self.server.state != "running") and (threading.active_count() == 2):
             logging.info("Freeing allocated objects...")
             if (self.server.config["server"]["verbose"]): print "Freeing allocated objects..."
             self.persist.shutdown()
             for filter in self.parallelFilters: filter.shutdown()
             for filter in self.sequentialFilters: filter.shutdown()
-            logging.info("Done.")
-            if (self.server.config["server"]["verbose"]): print "Done."
+            self.server.shutdown() 
         
     def removeClient(self, ID):
         with removeClientLock:
@@ -353,8 +325,18 @@ class ThreadedTCPServer(SocketServer.ThreadingMixIn, SocketServer.TCPServer):
         # Call SocketSever constructor
         SocketServer.TCPServer.__init__(self, (self.config["global"]["connection"]["address"], self.config["global"]["connection"]["port"]), ServerHandler)
     
-    def start(self):
+    def run(self):
+        self.startTime = datetime.now()
+        self.state = "running"
+        
         logging.info("Server ready. Waiting for connections...")
         if (self.config["server"]["verbose"]): print "Server ready. Waiting for connections..."
-        self.startTime = datetime.now()
         self.serve_forever()
+        
+        if (self.state == "finishing"):
+            logging.info("Server finished." )
+            if (self.config["server"]["verbose"]): print "Server finished."
+        else: 
+            logging.info("Server manually shut down.")
+            if (self.config["server"]["verbose"]): print "Server manually shut down."
+            

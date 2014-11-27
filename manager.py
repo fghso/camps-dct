@@ -77,7 +77,6 @@ else:
     clientsStatusList = message["clients"]
     serverStatus = message["server"]
     serverStatus["time"]["start"] = datetime.utcfromtimestamp(serverStatus["time"]["start"])
-    serverStatus["shutingdown"] = "shuting down" if serverStatus["shutingdown"] else "running"
     
     # Raw status
     if (args.status == "raw"):
@@ -86,7 +85,7 @@ else:
         status += str("    [address, port, pid, start, state, total, succeeded, inprogress, available, failed, error]\n    ")
         status += str([serverAddress[1], serverAddress[2], serverStatus["pid"], 
                         serverStatus["time"]["start"].strftime("%d/%m/%Y %H:%M:%S"),
-                        serverStatus["shutingdown"],
+                        serverStatus["state"],
                         serverStatus["counts"]["total"], serverStatus["counts"]["succeeded"], 
                         serverStatus["counts"]["inprogress"], serverStatus["counts"]["available"], 
                         serverStatus["counts"]["failed"], serverStatus["counts"]["error"]])
@@ -145,7 +144,7 @@ else:
         connectedClientsPercent = ((connectedClients / clientsTotal) * 100) if (clientsTotal > 0) else 0.0
         disconnectedClientsPercent = ((disconnectedClients / clientsTotal) * 100) if (clientsTotal > 0) else 0.0
         removingClientsPercent = ((removingClients / clientsTotal) * 100) if (clientsTotal > 0) else 0.0
-        status += "    Server state: %s\n" % serverStatus["shutingdown"]
+        status += "    Server state: %s\n" % serverStatus["state"]
         status += "      Server address: %s (%s:%s/%s)\n" % (serverAddress[0], serverAddress[1], serverAddress[2], serverStatus["pid"])
         status += "      Server uptime: %s\n" % ("%02dh%02dm%02ds" % (elapsedHoursMin[0],  elapsedHoursMin[1], elapsedMinSec[1]))
         status += "    Total number of clients: %d\n" % clientsTotal
