@@ -216,9 +216,8 @@ pip-log.txt
 .mr.developer.cfg
 
 # Custom
-CrawledData
 *.log
 *.out
-app.py
-config.xml
+*.xml
+*.json
 

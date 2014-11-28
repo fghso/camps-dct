@@ -2,7 +2,7 @@
 
 import socket
 import time
-import logging
+import common
 
 
 class Crawler:
@@ -14,16 +14,15 @@ class Crawler:
     # the resource ID and the second element is a dictionary containing resource information (also in a format understood by 
     # the persistence handler used)
     def crawl(self, resourceID, filters):
-        logging.info("Resource received: %s" % resourceID)
-        logging.info("Filters: %s" % filters)
-        
-        print "Resource received: %s" % resourceID        
-        print "Filters: %s" % filters
+        echo = common.EchoHandler({"verbose": "True"})
+
+        echo.default("Resource received: %s" % resourceID)
+        echo.default("Filters: %s" % filters)
         
         sleepTime = 30
-        print "Sleeping for %d seconds..." % sleepTime
+        echo.default("Sleeping for %d seconds..." % sleepTime)
         time.sleep(sleepTime)
-        print "Awaked!\n"
+        echo.default("Awaked!\n")
         
         newResources = []
         newResources.append((resourceID + 1, {"crawler_name": socket.gethostname(), "response_code": 3}))

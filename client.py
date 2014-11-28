@@ -5,7 +5,6 @@ import sys
 import os
 import socket
 import json
-import logging
 import argparse
 import common
 
@@ -14,8 +13,8 @@ import common
 parser = argparse.ArgumentParser(add_help=False)
 parser.add_argument("configFilePath")
 parser.add_argument("-h", "--help", action="help", help="show this help message and exit")
-parser.add_argument("-v", "--verbose", type=common.str2bool, metavar="on/off", help="enable/disable log messages on screen")
-parser.add_argument("-g", "--logging", type=common.str2bool, metavar="on/off", help="enable/disable logging on file")
+parser.add_argument("-v", "--verbose", metavar="on/off", help="enable/disable log messages on screen")
+parser.add_argument("-g", "--logging", metavar="on/off", help="enable/disable logging on file")
 args = parser.parse_args()
 
 # Add directory of the configuration file to sys.path before import crawler, so that the module can easily 
@@ -29,6 +28,9 @@ config = common.loadConfig(args.configFilePath)
 if (args.verbose is not None): config["client"]["verbose"] = args.verbose
 if (args.logging is not None): config["client"]["logging"] = args.logging
 
+# Get an instance of the crawler
+crawlerObject = crawler.Crawler()
+
 # Get client ID
 processID = os.getpid()
 server = common.NetworkHandler()
@@ -38,18 +40,11 @@ message = server.recv()
 if (message["fail"]): sys.exit("ERROR: %s" % message["reason"])
 else: clientID = message["clientid"]
 
-# Configure logging
-if (config["client"]["logging"]):
-    logging.basicConfig(format="%(asctime)s %(module)s %(levelname)s: %(message)s", datefmt="%d/%m/%Y %H:%M:%S", 
-                        filename="client%s[%s%s].log" % (clientID, socket.gethostname(), config["global"]["connection"]["port"]), filemode="w", level=logging.INFO)
-
-logging.info("Connected to server with ID %s " % clientID)
-if (config["client"]["verbose"]): print "Connected to server with ID %s " % clientID
-
-# Get an instance of the crawler
-crawlerObject = crawler.Crawler()
+# Configure echoing
+echo = common.EchoHandler(config["client"], "client%s[%s%s].log" % (clientID, socket.gethostname(), config["global"]["connection"]["port"]))
 
 # Execute collection
+echo.default("Connected to server with ID %s " % clientID)
 server.send({"command": "GET_ID"})
 while (True):
     try:
@@ -57,8 +52,7 @@ while (True):
         
         # Stop client execution if the connection has been interrupted
         if (not message): 
-            logging.error("Connection to server has been abruptly closed.")
-            if (config["client"]["verbose"]): print "ERROR: Connection to server has been abruptly closed."
+            echo.default("Connection to server has been abruptly closed.", "ERROR")
             break
         
         command = message["command"]
@@ -72,13 +66,12 @@ while (True):
                 crawlerResponse = crawlerObject.crawl(resourceID, filters)
             # If a SystemExit exception has been raised, abort execution
             except SystemExit: 
-                logging.exception("SystemExit exception while crawling resource %s. Execution aborted." % resourceID)
-                if (config["client"]["verbose"]): print "ERROR: SystemExit exception while crawling resource %s. Execution aborted." % resourceID
+                echo.exception("SystemExit exception while crawling resource %s. Execution aborted." % resourceID)
                 server.send({"command": "EXCEPTION", "type": "error"})
                 break
             # If another type of exception has been raised, report fail
             except: 
-                logging.exception("Exception while crawling resource %s." % resourceID)
+                echo.exception("Exception while crawling resource %s." % resourceID)
                 server.send({"command": "EXCEPTION", "type": "fail"})
             # If everything is ok, tell server that the collection of the resource has been finished. 
             # If feedback is enabled, also send the new resources to server
@@ -91,24 +84,18 @@ while (True):
             
         elif (command == "FINISH"):
             reason = message["reason"]
-            if (reason == "task done"):
-                logging.info("Task done, client finished.")
-                if (config["client"]["verbose"]): print "Task done, client finished."
-            elif (reason == "shut down"):
-                logging.info("Server shuting down, client finished.")
-                if (config["client"]["verbose"]): print "Server shuting down, client finished."
-            else: 
-                logging.info("Client manually removed.")
-                if (config["client"]["verbose"]): print "Client manually removed."
+            if (reason == "task done"): echo.default("Task done, client finished.")
+            elif (reason == "shut down"): echo.default("Server shuting down, client finished.")
+            else: echo.default("Client manually removed.")
             break
             
     except Exception as error:
-        logging.exception("Exception while processing data. Execution aborted.")
-        if (config["client"]["verbose"]):
-            print "ERROR: %s" % str(error)
-            excType, excObj, excTb = sys.exc_info()
-            fileName = os.path.split(excTb.tb_frame.f_code.co_filename)[1]
-            print (excType, fileName, excTb.tb_lineno)
+        echo.exception("Exception while processing data. Execution aborted.")
+        # if (config["client"]["verbose"]):
+            # print "ERROR: %s" % str(error)
+            # excType, excObj, excTb = sys.exc_info()
+            # fileName = os.path.split(excTb.tb_frame.f_code.co_filename)[1]
+            # print (excType, fileName, excTb.tb_lineno)
         break
 
 server.close()

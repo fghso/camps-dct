@@ -11,7 +11,7 @@ class BaseFilter():
     def _extractConfig(self, configurationsDictionary):
         self.config = configurationsDictionary
     
-        if (self.config["name"]): self.name = self.config["name"]
+        if ("name" in self.config): self.name = self.config["name"]
         else: self.name = self.__class__.__name__
     
     def getName(self): return self.name

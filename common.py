@@ -3,6 +3,7 @@
 import socket
 import json
 import logging
+import inspect
 import xmltodict
 
     
@@ -41,8 +42,7 @@ class NetworkHandler():
         strMsg = ""
         while (True):
             packet = ""
-            try: packet = self.sock.recv(self.bufsize)
-            except: logging.exception("Exception while receiving data.")
+            packet = self.sock.recv(self.bufsize)
             if (not packet): return None
             header = json.loads(packet[:self.headersize])
             splitMsg = packet[self.headersize:]
@@ -53,6 +53,37 @@ class NetworkHandler():
     def close(self):
         self.sock.shutdown(socket.SHUT_RDWR)
         self.sock.close()
+        
+        
+class EchoHandler():
+    def __init__(self, configurationsDictionary = {}, loggingFileName = "", defaultLoggingLevel = "INFO"):
+        self._extractConfig(configurationsDictionary)
+        # Identify calling module
+        frameRecords = inspect.stack()[1]
+        self.callingModuleName = inspect.getmodulename(frameRecords[1])
+        # Set up logging
+        if (self.logging):
+            if (not loggingFileName): loggingFileName = self.callingModuleName + ".log"
+            logging.basicConfig(format="%(asctime)s %(name)s %(levelname)s: %(message)s", datefmt="%d/%m/%Y %H:%M:%S", 
+                                filename=loggingFileName, filemode="w", level=getattr(logging, defaultLoggingLevel))
+            self.logger = logging.getLogger(self.callingModuleName)
+        
+    def _extractConfig(self, configurationsDictionary):
+        if ("logging" not in configurationsDictionary): self.logging = True
+        else: self.logging = str2bool(configurationsDictionary["logging"])
+    
+        if ("verbose" not in configurationsDictionary): self.verbose = False
+        else: self.verbose = str2bool(configurationsDictionary["verbose"])
+        
+    def default(self, message, loggingLevel = ""):
+        if (self.logging): self.logger.log(getattr(logging, loggingLevel, self.logger.getEffectiveLevel()), message)
+        if (self.verbose): 
+            if (loggingLevel): print loggingLevel + ": " + message
+            else: print message
+        
+    def exception(self, message):
+        if (self.logging): self.logger.exception(message)
+        if (self.verbose): print "ERROR: " + message
         
         
 # ==================== Methods ====================
@@ -79,28 +110,15 @@ def loadConfig(configFilePath):
     if ("loopforever" not in config["server"]): config["server"]["loopforever"] = False
     else: config["server"]["loopforever"] = str2bool(config["server"]["loopforever"])
     
-    if ("logging" not in config["server"]): config["server"]["logging"] = True
-    else: config["server"]["logging"] = str2bool(config["server"]["logging"])
-    
-    if ("verbose" not in config["server"]): config["server"]["verbose"] = False
-    else: config["server"]["verbose"] = str2bool(config["server"]["verbose"])
-    
     if ("filter" not in config["server"]): config["server"]["filter"] = []
     elif (not isinstance(config["server"]["filter"], list)): config["server"]["filter"] = [config["server"]["filter"]]
     
     for filter in config["server"]["filter"]:
-        if ("name" not in filter): filter["name"] = None
         if ("parallel" not in filter): filter["parallel"] = False
         else: filter["parallel"] = str2bool(filter["parallel"]) 
             
     # Client default values
     if ("client" not in config): config["client"] = {}
-    
-    if ("logging" not in config["client"]): config["client"]["logging"] = True
-    else: config["client"]["logging"] = str2bool(config["client"]["logging"])
-    
-    if ("verbose" not in config["client"]): config["client"]["verbose"] = False
-    else: config["client"]["verbose"] = str2bool(config["client"]["verbose"])
     
     # Persistence
     if (isinstance(config["persistence"]["handler"], list)): 

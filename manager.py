@@ -13,7 +13,7 @@ parser = argparse.ArgumentParser(add_help=False, description="Send action comman
 parser.add_argument("configFilePath")
 parser.add_argument("-h", "--help", action="help", help="show this help message and exit")
 parser.add_argument("-s", "--status", choices=["raw", "basic", "extended"], help="show status information")
-parser.add_argument("-r", "--remove", metavar="clientID", nargs="+", help="remove clients from the server's list. Multiple client IDs can be given, separated by commas or spaces. To remove all disconnected clients, write '+' as the ID")
+parser.add_argument("-r", "--remove", metavar="clientID", nargs="+", help="remove clients from the server's list. Multiple client IDs can be given, separated by spaces. To remove all disconnected clients, write '+' as the ID")
 parser.add_argument("--reset", choices=["inprogress", "failed", "error"], help="make available the resources with the specified status")
 parser.add_argument("--shutdown", action="store_true", help="remove all clients from the server's list and shutdown server")
 args = parser.parse_args()
@@ -129,7 +129,7 @@ else:
                             clientStatus["time"]["lastrequest"].strftime("%d/%m/%Y %H:%M:%S"), 
                             clientStatus["amount"], 
                             #"" if (clientStatus["amount"] == 1) else "s",
-                            "%02dh%02dm%02ds" % (elapsedHoursMin[0],  elapsedHoursMin[1], elapsedMinSec[1])
+                            "%02d:%02d:%02d" % (elapsedHoursMin[0],  elapsedHoursMin[1], elapsedMinSec[1])
                         )
         else:
             status += "  No client connected right now.\n"
@@ -146,7 +146,7 @@ else:
         removingClientsPercent = ((removingClients / clientsTotal) * 100) if (clientsTotal > 0) else 0.0
         status += "    Server state: %s\n" % serverStatus["state"]
         status += "      Server address: %s (%s:%s/%s)\n" % (serverAddress[0], serverAddress[1], serverAddress[2], serverStatus["pid"])
-        status += "      Server uptime: %s\n" % ("%02dh%02dm%02ds" % (elapsedHoursMin[0],  elapsedHoursMin[1], elapsedMinSec[1]))
+        status += "      Server uptime: %s\n" % ("%02d:%02d:%02d" % (elapsedHoursMin[0],  elapsedHoursMin[1], elapsedMinSec[1]))
         status += "    Total number of clients: %d\n" % clientsTotal
         status += "      Connected clients: %d (%.2f%%)\n" % (connectedClients, connectedClientsPercent)
         status += "      Disconnected clients: %d (%.2f%%)\n" % (disconnectedClients, disconnectedClientsPercent)

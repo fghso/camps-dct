@@ -2,13 +2,10 @@
 
 import threading
 import json
-import logging
 import common
+import mysql.connector
 from datetime import datetime
 from copy import deepcopy
-import mysql.connector
-from mysql.connector.errors import Error
-from mysql.connector import errorcode
 
 
 class BasePersistenceHandler():  
@@ -91,7 +88,6 @@ class MemoryPersistenceHandler(BasePersistenceHandler):
                 pk = MemoryPersistenceHandler.nextAvailable
                 while (self.resources[pk]["status"] != self.statusCodes["AVAILABLE"]): pk += 1
                 resource = (pk, self.resources[pk]["id"], deepcopy(self.resources[pk]["info"]))
-        print self.resources
         return resource
     
     def update(self, resourceKey, status, resourceInfo): 
