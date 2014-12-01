@@ -82,16 +82,16 @@ else:
     if (args.status == "raw"):
         status = "\n" + (" Status ").center(50, ':') + "\n\n"
         status += "  Server:\n"
-        status += str("    [address, port, pid, start, state, total, succeeded, inprogress, available, failed, error]\n    ")
+        status += str("    [address, port, pid, state, start, total, succeeded, inprogress, available, failed, error]\n    ")
         status += str([serverAddress[1], serverAddress[2], serverStatus["pid"], 
-                        serverStatus["time"]["start"].strftime("%d/%m/%Y %H:%M:%S"),
                         serverStatus["state"],
+                        serverStatus["time"]["start"].strftime("%d/%m/%Y %H:%M:%S"),
                         serverStatus["counts"]["total"], serverStatus["counts"]["succeeded"], 
                         serverStatus["counts"]["inprogress"], serverStatus["counts"]["available"], 
                         serverStatus["counts"]["failed"], serverStatus["counts"]["error"]])
         status += "\n\n  Clients:\n"
         if (clientsStatusList): 
-            status += str("    [id, state, hostname, address, port, pid, start, lastrequest, resource, amount]\n    ")
+            status += str("    [id, state, hostname, address, port, pid, start, lastrequest, meanservertime, meanclienttime, meancrawlertime, resource, amount]\n    ")
         else: 
             status += "    No client connected right now.\n"
         for clientStatus in clientsStatusList:
@@ -101,7 +101,10 @@ else:
             status += str([clientStatus["clientid"], clientStatus["threadstate"], str(clientStatus["address"][0]), 
                         str(clientStatus["address"][1]), clientStatus["address"][2], clientStatus["pid"],
                         clientStatus["time"]["start"].strftime("%d/%m/%Y %H:%M:%S"), 
-                        clientStatus["time"]["lastrequest"].strftime("%d/%m/%Y %H:%M:%S"),                            
+                        clientStatus["time"]["lastrequest"].strftime("%d/%m/%Y %H:%M:%S"),
+                        "%08.5f" % clientStatus["time"]["meanserver"],
+                        "%08.5f" % clientStatus["time"]["meanclient"],                        
+                        "%08.5f" % clientStatus["time"]["meancrawler"],
                         clientStatus["resourceid"] if (clientStatus["resourceid"]) else "waiting", 
                         clientStatus["amount"]])
             status += "\n    "
@@ -144,15 +147,6 @@ else:
         connectedClientsPercent = ((connectedClients / clientsTotal) * 100) if (clientsTotal > 0) else 0.0
         disconnectedClientsPercent = ((disconnectedClients / clientsTotal) * 100) if (clientsTotal > 0) else 0.0
         removingClientsPercent = ((removingClients / clientsTotal) * 100) if (clientsTotal > 0) else 0.0
-        status += "    Server state: %s\n" % serverStatus["state"]
-        status += "      Server address: %s (%s:%s/%s)\n" % (serverAddress[0], serverAddress[1], serverAddress[2], serverStatus["pid"])
-        status += "      Server uptime: %s\n" % ("%02d:%02d:%02d" % (elapsedHoursMin[0],  elapsedHoursMin[1], elapsedMinSec[1]))
-        status += "    Total number of clients: %d\n" % clientsTotal
-        status += "      Connected clients: %d (%.2f%%)\n" % (connectedClients, connectedClientsPercent)
-        status += "      Disconnected clients: %d (%.2f%%)\n" % (disconnectedClients, disconnectedClientsPercent)
-        status += "      Clients being removed: %d (%.2f%%)\n" % (removingClients, removingClientsPercent)
-        status += "    Number of resources processed: %d\n" % sum([clientStatus["amount"] for clientStatus in clientsStatusList])
-        status += "\n  " + (" Global Info ").center(46, '=') + "\n\n"
         resourcesTotal = float(serverStatus["counts"]["total"])
         resourcesSucceeded = float(serverStatus["counts"]["succeeded"])
         resourcesInProgress = float(serverStatus["counts"]["inprogress"])
@@ -166,6 +160,40 @@ else:
         resourcesFailedPercent = ((resourcesFailed / resourcesTotal) * 100) if (resourcesTotal > 0) else 0.0
         resourcesErrorPercent = ((resourcesError / resourcesTotal) * 100) if (resourcesTotal > 0) else 0.0
         resourcesProcessedPercent = ((resourcesProcessed / resourcesTotal) * 100) if (resourcesTotal > 0) else 0.0
+        meanServerTime = sum([clientStatus["time"]["meanserver"] for clientStatus in clientsStatusList])
+        meanServerMinSec = divmod(meanServerTime / clientsTotal, 60)
+        meanServerHoursMin = divmod(meanServerMinSec[0], 60)
+        meanClientTime = sum([clientStatus["time"]["meanclient"] for clientStatus in clientsStatusList])
+        meanClientMinSec = divmod(meanClientTime/ clientsTotal, 60)
+        meanClientHoursMin = divmod(meanClientMinSec[0], 60)
+        meanCrawlerTime = sum([clientStatus["time"]["meancrawler"] for clientStatus in clientsStatusList])
+        meanCrawlerMinSec = divmod(meanCrawlerTime / clientsTotal, 60)
+        meanCrawlerHoursMin = divmod(meanCrawlerMinSec[0], 60)
+        numResourcesProcessed = float(sum([clientStatus["amount"] for clientStatus in clientsStatusList]))
+        meanResourcesPerclient = numResourcesProcessed / clientsTotal
+        meanResourcesPerSec = numResourcesProcessed / elapsedTime.seconds
+        meanTimePerResource = elapsedTime.seconds / numResourcesProcessed
+        meanResourceMinSec = divmod(meanTimePerResource, 60)
+        meanResourceHoursMin = divmod(meanResourceMinSec[0], 60)
+        estimatedTimeToFinish = meanTimePerResource * resourcesTotal
+        estimatedMinSec = divmod(estimatedTimeToFinish, 60)
+        estimatedHoursMin = divmod(estimatedMinSec[0], 60)
+        status += "    Server state: %s\n" % serverStatus["state"]
+        status += "      Server address: %s (%s:%s/%s)\n" % (serverAddress[0], serverAddress[1], serverAddress[2], serverStatus["pid"])
+        status += "      Server uptime: %s\n" % ("%02d:%02d:%02d" % (elapsedHoursMin[0],  elapsedHoursMin[1], elapsedMinSec[1]))
+        status += "      Mean server time: %s\n" % ("%02d:%02d:%08.5f" % (meanServerHoursMin[0],  meanServerHoursMin[1], meanServerMinSec[1]))
+        status += "      Mean client time: %s\n" % ("%02d:%02d:%08.5f" % (meanClientHoursMin[0],  meanClientHoursMin[1], meanClientMinSec[1]))
+        status += "      Mean crawler time: %s\n" % ("%02d:%02d:%08.5f" % (meanCrawlerHoursMin[0],  meanCrawlerHoursMin[1], meanCrawlerMinSec[1]))
+        status += "      Estimated time to finish: %s\n" % ("%02d:%02d:%02d" % (estimatedHoursMin[0],  estimatedHoursMin[1], estimatedMinSec[1]))
+        status += "    Total number of clients: %d\n" % clientsTotal
+        status += "      Connected clients: %d (%.2f%%)\n" % (connectedClients, connectedClientsPercent)
+        status += "      Disconnected clients: %d (%.2f%%)\n" % (disconnectedClients, disconnectedClientsPercent)
+        status += "      Clients being removed: %d (%.2f%%)\n" % (removingClients, removingClientsPercent)
+        status += "    Number of resources processed: %d\n" % numResourcesProcessed
+        status += "      Mean resources per client: %.2f\n" % meanResourcesPerclient
+        status += "      Mean resources per time unit: %.2f/h, %.2f/m, %.2f/s\n" % (meanResourcesPerSec * 3600, meanResourcesPerSec * 60, meanResourcesPerSec)
+        status += "      Mean time per resource: %02d:%02d:%08.5f\n" % (meanResourceHoursMin[0],  meanResourceHoursMin[1], meanResourceMinSec[1])
+        status += "\n  " + (" Global Info ").center(46, '=') + "\n\n"
         status += "    Total number of resources: %d\n" % resourcesTotal
         status += "    Number of resources processed: %d (%.5f%%)\n" % (resourcesProcessed, resourcesProcessedPercent)
         status += "      Succeeded: %d (%.5f%%)\n" % (resourcesSucceeded, resourcesSucceededPercent)

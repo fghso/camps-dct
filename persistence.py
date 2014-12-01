@@ -6,6 +6,7 @@ import common
 import mysql.connector
 from datetime import datetime
 from copy import deepcopy
+from collections import deque
 
 
 class BasePersistenceHandler():  
@@ -30,14 +31,12 @@ class BasePersistenceHandler():
 class MemoryPersistenceHandler(BasePersistenceHandler):
     loadLock = threading.Lock()
     insertLock = threading.Lock()
-    resetLock = threading.Lock()
-    nextAvailable = None
     resources = []
     insertedResources = []
     IDsHash = {}
     statusRecords = {BasePersistenceHandler.statusCodes["SUCCEDED"]:   0,
                      BasePersistenceHandler.statusCodes["INPROGRESS"]: [],
-                     BasePersistenceHandler.statusCodes["AVAILABLE"]:  0, 
+                     BasePersistenceHandler.statusCodes["AVAILABLE"]:  deque(), 
                      BasePersistenceHandler.statusCodes["FAILED"]:     [],
                      BasePersistenceHandler.statusCodes["ERROR"]:      []}
 
@@ -54,9 +53,6 @@ class MemoryPersistenceHandler(BasePersistenceHandler):
                 ])
                 for pk, resource in enumerate(self.resources):
                     if (resource["status"] == self.statusCodes["SUCCEDED"]): self.statusRecords[resource["status"]] += 1
-                    elif (resource["status"] == self.statusCodes["AVAILABLE"]): 
-                        self.statusRecords[resource["status"]] += 1
-                        if (MemoryPersistenceHandler.nextAvailable is None): MemoryPersistenceHandler.nextAvailable = pk
                     else: self.statusRecords[resource["status"]].append(pk)
                     if (self.config["uniqueresourceid"]): 
                         if (resource["id"] not in self.IDsHash): self.IDsHash[resource["id"]] = (self.resources, pk)
@@ -82,24 +78,20 @@ class MemoryPersistenceHandler(BasePersistenceHandler):
             list.append({"id": id, "status": status, "info": info})
     
     def select(self): 
-        resource = (None, None, None)
-        with self.resetLock:
-            if (self.statusRecords[self.statusCodes["AVAILABLE"]]):
-                pk = MemoryPersistenceHandler.nextAvailable
-                while (self.resources[pk]["status"] != self.statusCodes["AVAILABLE"]): pk += 1
-                resource = (pk, self.resources[pk]["id"], deepcopy(self.resources[pk]["info"]))
-        return resource
+        try: pk = self.statusRecords[self.statusCodes["AVAILABLE"]].popleft()
+        except IndexError: return (None, None, None)
+        self._save(self.resources, pk, None, self.statusCodes["INPROGRESS"], None, False)
+        self.statusRecords[self.statusCodes["INPROGRESS"]].append(pk)
+        #print self.resources
+        return (pk, self.resources[pk]["id"], deepcopy(self.resources[pk]["info"]))
     
     def update(self, resourceKey, status, resourceInfo): 
         currentStatus = self.resources[resourceKey]["status"]
-        if (currentStatus == self.statusCodes["AVAILABLE"]): self.statusRecords[currentStatus] -= 1
-        else: self.statusRecords[currentStatus].remove(resourceKey)
+        self.statusRecords[currentStatus].remove(resourceKey)
         if (resourceInfo): self._save(self.resources, resourceKey, None, status, resourceInfo)
         else: self._save(self.resources, resourceKey, None, status, resourceInfo, False)
-        if (status == self.statusCodes["SUCCEDED"]): 
-            self.statusRecords[status] += 1
-        else: 
-            with self.resetLock: self.statusRecords[status].append(resourceKey)
+        if (status == self.statusCodes["SUCCEDED"]): self.statusRecords[status] += 1
+        else: self.statusRecords[status].append(resourceKey)
         
     def insert(self, resourcesList): 
         insertList = []
@@ -112,8 +104,8 @@ class MemoryPersistenceHandler(BasePersistenceHandler):
                     self._save(updateList, pk, None, None, resourceInfo)
                     continue
                 else: raise KeyError("Cannot insert resource, ID %s already exists." % resourceID)
-            if (not self.config["separateinsertlist"]): self.statusRecords[self.statusCodes["AVAILABLE"]] += 1
             with self.insertLock:
+                if (not self.config["separateinsertlist"]): self.statusRecords[self.statusCodes["AVAILABLE"]].append(len(insertList))
                 if (self.config["uniqueresourceid"]): self.IDsHash[resourceID] = (insertList, len(insertList))
                 self._save(insertList, None, resourceID, self.statusCodes["AVAILABLE"], resourceInfo)
         
@@ -121,22 +113,17 @@ class MemoryPersistenceHandler(BasePersistenceHandler):
         return (len(self.resources), 
                 self.statusRecords[self.statusCodes["SUCCEDED"]], 
                 len(self.statusRecords[self.statusCodes["INPROGRESS"]]), 
-                self.statusRecords[self.statusCodes["AVAILABLE"]], 
+                len(self.statusRecords[self.statusCodes["AVAILABLE"]]), 
                 len(self.statusRecords[self.statusCodes["FAILED"]]), 
                 len(self.statusRecords[self.statusCodes["ERROR"]]))
         
     def reset(self, status): 
-        with self.resetLock:
-            for pk in self.statusRecords[status]:
-                self._save(self.resources, pk, None, self.statusCodes["AVAILABLE"], None, False)
-                if (MemoryPersistenceHandler.nextAvailable is None) or (pk < MemoryPersistenceHandler.nextAvailable):   
-                    MemoryPersistenceHandler.nextAvailable = pk
-                
-            resetedCount = len(self.statusRecords[status])
-            self.statusRecords[self.statusCodes["AVAILABLE"]] += resetedCount
-            self.statusRecords[status] = []
-
-        return resetedCount
+        resetList = self.statusRecords[status][:]
+        for pk in resetList:
+            self.statusRecords[status].remove(pk)
+            self._save(self.resources, pk, None, self.statusCodes["AVAILABLE"], None, False)
+            self.statusRecords[self.statusCodes["AVAILABLE"]].appendleft(pk)
+        return len(resetList)
         
         
 class FilePersistenceHandler(MemoryPersistenceHandler):
@@ -150,10 +137,6 @@ class FilePersistenceHandler(MemoryPersistenceHandler):
                 with open(self.config["selectfilename"], "r") as resourcesFile: resourcesList = json.load(resourcesFile)
                 for resource in resourcesList:
                     if (resource["status"] == self.statusCodes["SUCCEDED"]): self.statusRecords[resource["status"]] += 1
-                    elif (resource["status"] == self.statusCodes["AVAILABLE"]): 
-                        self.statusRecords[resource["status"]] += 1
-                        if (MemoryPersistenceHandler.nextAvailable is None): 
-                            MemoryPersistenceHandler.nextAvailable = len(self.resources)
                     else: self.statusRecords[resource["status"]].append(len(self.resources))
                     if (self.config["uniqueresourceid"]): 
                         if (resource["id"] not in self.IDsHash): 
@@ -216,6 +199,7 @@ class MySQLPersistenceHandler(BasePersistenceHandler):
     def __init__(self, configurationsDictionary):
         self._extractConfig(configurationsDictionary)
         self.mysqlConnection = mysql.connector.connect(user=self.selectConfig["user"], password=self.selectConfig["password"], host=self.selectConfig["host"], database=self.selectConfig["name"])
+        self.lastSelectID = None
                 
     def _extractConfig(self, configurationsDictionary):
         self.config = configurationsDictionary
@@ -240,12 +224,16 @@ class MySQLPersistenceHandler(BasePersistenceHandler):
         
     def select(self):
         cursor = self.mysqlConnection.cursor()
-        query = "SELECT " + ", ".join(["resources_pk", "resource_id"] + self.selectConfig["infocolumn"]) + " FROM " + self.selectConfig["table"] + " WHERE status = %s ORDER BY resources_pk LIMIT 1"
-        cursor.execute(query, (self.statusCodes["AVAILABLE"],))
+        query = "UPDATE " + self.selectConfig["table"] + " SET resources_pk = LAST_INSERT_ID(resources_pk), status = %s WHERE status = %s ORDER BY resources_pk LIMIT 1"
+        cursor.execute(query, (self.statusCodes["INPROGRESS"], self.statusCodes["AVAILABLE"]))
+        query = "SELECT " + ", ".join(["resources_pk", "resource_id"] + self.selectConfig["infocolumn"]) + " FROM " + self.selectConfig["table"] + " WHERE resources_pk = LAST_INSERT_ID()"
+        cursor.execute(query)
         resource = cursor.fetchone()
         self.mysqlConnection.commit()
         cursor.close()
-        if (resource): return (resource[0], resource[1], dict(zip(self.selectConfig["infocolumn"], resource[2:])))
+        if (resource) and (resource[0] != self.lastSelectID): 
+            self.lastSelectID = resource[0]
+            return (resource[0], resource[1], dict(zip(self.selectConfig["infocolumn"], resource[2:])))
         else: return (None, None, None)
         
     def update(self, resourceKey, status, resourceInfo):

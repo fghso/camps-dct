@@ -7,6 +7,7 @@ import SocketServer
 import threading
 import json
 import time
+import timeit
 import calendar
 import common
 import persistence
@@ -28,8 +29,14 @@ clientsThreads = {}
 # Define the next ID to give to a new client
 nextFreeID = 1
 
+# Timing variables
+serverSumTimes = {0: 0.0}
+clientSumTimes = {0: 0.0}
+crawlerSumTimes = {0: 0.0}
+numTimingMeasures = {0: long(0)}
+numCrawlingMeasures = {0: long(0)}
+
 # Define synchronization objects for critical regions of the code
-getIDLock = threading.Lock()
 removeClientLock = threading.Lock()
 clientRemovedCondition = threading.Condition()
 shutdownLock = threading.Lock()
@@ -38,6 +45,9 @@ shutdownLock = threading.Lock()
 # ==================== Classes ====================
 class ServerHandler(SocketServer.BaseRequestHandler):
     def setup(self):
+        # Get network handler instance
+        self.client = common.NetworkHandler(self.request)
+    
         # Get persistence handler instance
         persistenceHandlerOptions = deepcopy(self.server.config["persistence"]["handler"])
         self.persist = self.server.PersistenceHandlerClass(persistenceHandlerOptions)
@@ -51,22 +61,34 @@ class ServerHandler(SocketServer.BaseRequestHandler):
             else: self.sequentialFilters.append(FilterClass(filterOptions))
 
     def handle(self):
-        # Declare global variable
+        # Declare global variables
         global nextFreeID
+        global serverSumTimes
+        global clientSumTimes
+        global crawlerSumTimes
+        global numTimingMeasures
+        global numCrawlingMeasures
     
         # Define some local variables
         config = self.server.config
         echo = self.server.echo
+        client = self.client
         persist = self.persist
         status = self.persist.statusCodes
-        client = common.NetworkHandler(self.request)
     
         # Start to handle
         clientID = 0
         running = True
         while (running):
             try: 
+                startClientTime = timeit.default_timer()
+                startCrawlerTime = timeit.default_timer()
+                
                 message = client.recv()
+                
+                endClientTime = timeit.default_timer()
+                endCrawlerTime = timeit.default_timer()
+                startServerTime = timeit.default_timer()
                 
                 # Stop thread execution if the connection has been interrupted
                 if (not message): 
@@ -91,6 +113,11 @@ class ServerHandler(SocketServer.BaseRequestHandler):
                             client.send({"command": "GIVE_LOGIN", "fail": True, "reason": "Cannot connect, server is %s." % self.server.state})
                             running = False
                             continue
+                    serverSumTimes[clientID] = 0.0
+                    clientSumTimes[clientID] = 0.0
+                    crawlerSumTimes[clientID] = 0.0
+                    numTimingMeasures[clientID] = long(0)
+                    numCrawlingMeasures[clientID] = long(0)
                     client.send({"command": "GIVE_LOGIN", "fail": False, "clientid": clientID})
                     echo.default("New client connected: %d" % clientID)
                 
@@ -105,9 +132,7 @@ class ServerHandler(SocketServer.BaseRequestHandler):
                         tryagain = False
                         # If the client hasn't been removed, check resource availability
                         if (not clientStopEvent.is_set()):
-                            with getIDLock:
-                                (resourceKey, resourceID, resourceInfo) = persist.select()
-                                if (resourceID): persist.update(resourceKey, status["INPROGRESS"], None)
+                            (resourceKey, resourceID, resourceInfo) = persist.select()
                             # If there is a resource available, send ID to client
                             if (resourceID):
                                 clientsInfo[clientID][2] = resourceKey
@@ -160,7 +185,7 @@ class ServerHandler(SocketServer.BaseRequestHandler):
                         echo.default("Client %s reported error for resource %s. Connection closed." % (clientID, clientResourceID), "ERROR")
                         persist.update(clientResourceKey, status["ERROR"], None)
                         running = False
-                    
+                                    
                 elif (command == "GET_STATUS"):
                     # Clients status
                     clientsStatusList = []
@@ -174,11 +199,14 @@ class ServerHandler(SocketServer.BaseRequestHandler):
                         clientStatus["amount"] = info[4]
                         clientStatus["time"] = {"start": calendar.timegm(info[5].utctimetuple())}
                         clientStatus["time"]["lastrequest"] = calendar.timegm(info[6].utctimetuple())
+                        clientStatus["time"]["meanserver"] = serverSumTimes[ID] / numTimingMeasures[ID]
+                        clientStatus["time"]["meanclient"] = clientSumTimes[ID] / numTimingMeasures[ID]
+                        clientStatus["time"]["meancrawler"] = crawlerSumTimes[ID] / numCrawlingMeasures[ID] if (numCrawlingMeasures[ID] > 0) else 0
                         clientsStatusList.append(clientStatus)
                     # Server status
                     serverStatus = {"pid": os.getpid()}
-                    serverStatus["time"] = {"start": calendar.timegm(self.server.startTime.utctimetuple())}
                     serverStatus["state"] = self.server.state
+                    serverStatus["time"] = {"start": calendar.timegm(self.server.startTime.utctimetuple())}
                     counts = persist.count()
                     serverStatus["counts"] = {"total": counts[0]}
                     serverStatus["counts"]["succeeded"] = counts[1]
@@ -235,6 +263,14 @@ class ServerHandler(SocketServer.BaseRequestHandler):
                         while (clientsInfo): clientRemovedCondition.wait()
                     client.send({"command": "SD_RET", "fail": False})
                     
+                endServerTime = timeit.default_timer()
+                serverSumTimes[clientID] += (endServerTime - startServerTime)
+                clientSumTimes[clientID] += (endClientTime - startClientTime)
+                numTimingMeasures[clientID] += 1
+                if (command == "DONE_ID") or (command == "EXCEPTION"):
+                    crawlerSumTimes[clientID] += (endCrawlerTime - startCrawlerTime)
+                    numCrawlingMeasures[clientID] += 1
+                    
             except Exception as error:
                 echo.exception("Exception while processing a request from client %d. Execution of thread '%s' aborted." % (clientID, threading.current_thread().name))
                 # if (config["server"]["verbose"]): 
@@ -266,7 +302,7 @@ class ServerHandler(SocketServer.BaseRequestHandler):
                     clientsThreads[ID][1].set()
                 else:
                     del clientsInfo[ID]
-                    echo.default("Client %d removed." % ID)
+                    self.server.echo.default("Client %d removed." % ID)
                 return True
             else:
                 return False

@@ -19,7 +19,7 @@ class Crawler:
         echo.default("Resource received: %s" % resourceID)
         echo.default("Filters: %s" % filters)
         
-        sleepTime = 30
+        sleepTime = 10
         echo.default("Sleeping for %d seconds..." % sleepTime)
         time.sleep(sleepTime)
         echo.default("Awaked!\n")
