@@ -78,12 +78,12 @@ class EchoHandler():
     def default(self, message, loggingLevel = ""):
         if (self.logging): self.logger.log(getattr(logging, loggingLevel, self.logger.getEffectiveLevel()), message)
         if (self.verbose): 
-            if (loggingLevel): print loggingLevel + ": " + message
-            else: print message
+            if (loggingLevel): print loggingLevel + ": " + message + "\n",
+            else: print message + "\n",
         
     def exception(self, message):
         if (self.logging): self.logger.exception(message)
-        if (self.verbose): print "ERROR: " + message
+        if (self.verbose): print "ERROR: " + message + "\n",
         
         
 # ==================== Methods ====================

@@ -82,7 +82,6 @@ class MemoryPersistenceHandler(BasePersistenceHandler):
         except IndexError: return (None, None, None)
         self._save(self.resources, pk, None, self.statusCodes["INPROGRESS"], None, False)
         self.statusRecords[self.statusCodes["INPROGRESS"]].append(pk)
-        #print self.resources
         return (pk, self.resources[pk]["id"], deepcopy(self.resources[pk]["info"]))
     
     def update(self, resourceKey, status, resourceInfo): 
