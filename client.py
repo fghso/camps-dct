@@ -76,8 +76,11 @@ while (True):
             # If everything is ok, tell server that the collection of the resource has been finished. 
             # If feedback is enabled, also send the new resources to server
             else:
-                if (config["global"]["feedback"]): server.send({"command": "DONE_ID", "resourceinfo": crawlerResponse[0], "newresources": crawlerResponse[1]})
-                else: server.send({"command": "DONE_ID", "resourceinfo": crawlerResponse[0]})
+                resourceInfo = crawlerResponse[0]
+                extraInfo = crawlerResponse[1]
+                newResources = None
+                if (config["global"]["feedback"]): newResources = crawlerResponse[2]
+                server.send({"command": "DONE_ID", "resourceinfo": resourceInfo, "extrainfo": extraInfo, "newresources": newResources})
             
         elif (command == "DONE_RET") or (command == "EXCEPTION_RET"):
             server.send({"command": "GET_ID"})

@@ -9,14 +9,18 @@ from copy import deepcopy
 from collections import deque
 
 
-class BasePersistenceHandler():  
-    statusCodes = {"SUCCEDED":   2,
-                   "INPROGRESS": 1,
-                   "AVAILABLE":  0, 
-                   "FAILED":    -1,
-                   "ERROR":     -2}
+class StatusCodes():
+    SUCCEDED   =  2
+    INPROGRESS =  1
+    AVAILABLE  =  0 
+    FAILED     = -1
+    ERROR      = -2
 
-    def __init__(self, configurationsDictionary): pass # Receives a copy of everything in handler section of the XML configuration file
+
+class BasePersistenceHandler():  
+    status = StatusCodes()
+    
+    def __init__(self, configurationsDictionary): pass # Receives a copy of everything in handler section of the XML configuration file as the parameter configurationsDictionary
     def select(self): return (None, None, None) # Return a tuple: (resource unique key, resource id, resource info dictionary)
     def update(self, resourceKey, status, resourceInfo): pass
     def insert(self, resourcesList): pass # Receives a list of tuples: [(resource id, resource info dictionary), ...]
@@ -34,11 +38,11 @@ class MemoryPersistenceHandler(BasePersistenceHandler):
     resources = []
     insertedResources = []
     IDsHash = {}
-    statusRecords = {BasePersistenceHandler.statusCodes["SUCCEDED"]:   0,
-                     BasePersistenceHandler.statusCodes["INPROGRESS"]: [],
-                     BasePersistenceHandler.statusCodes["AVAILABLE"]:  deque(), 
-                     BasePersistenceHandler.statusCodes["FAILED"]:     [],
-                     BasePersistenceHandler.statusCodes["ERROR"]:      []}
+    statusRecords = {BasePersistenceHandler.status.SUCCEDED:   0,
+                     BasePersistenceHandler.status.INPROGRESS: [],
+                     BasePersistenceHandler.status.AVAILABLE:  deque(), 
+                     BasePersistenceHandler.status.FAILED:     [],
+                     BasePersistenceHandler.status.ERROR:      []}
 
     def __init__(self, configurationsDictionary): 
         self._extractConfig(configurationsDictionary)
@@ -52,7 +56,7 @@ class MemoryPersistenceHandler(BasePersistenceHandler):
                     {"id": 4, "status": 0, "info": None}
                 ])
                 for pk, resource in enumerate(self.resources):
-                    if (resource["status"] == self.statusCodes["SUCCEDED"]): self.statusRecords[resource["status"]] += 1
+                    if (resource["status"] == self.status.SUCCEDED): self.statusRecords[resource["status"]] += 1
                     else: self.statusRecords[resource["status"]].append(pk)
                     if (self.config["uniqueresourceid"]): 
                         if (resource["id"] not in self.IDsHash): self.IDsHash[resource["id"]] = (self.resources, pk)
@@ -78,10 +82,10 @@ class MemoryPersistenceHandler(BasePersistenceHandler):
             list.append({"id": id, "status": status, "info": info})
     
     def select(self): 
-        try: pk = self.statusRecords[self.statusCodes["AVAILABLE"]].popleft()
+        try: pk = self.statusRecords[self.status.AVAILABLE].popleft()
         except IndexError: return (None, None, None)
-        self._save(self.resources, pk, None, self.statusCodes["INPROGRESS"], None, False)
-        self.statusRecords[self.statusCodes["INPROGRESS"]].append(pk)
+        self._save(self.resources, pk, None, self.status.INPROGRESS, None, False)
+        self.statusRecords[self.status.INPROGRESS].append(pk)
         return (pk, self.resources[pk]["id"], deepcopy(self.resources[pk]["info"]))
     
     def update(self, resourceKey, status, resourceInfo): 
@@ -89,7 +93,7 @@ class MemoryPersistenceHandler(BasePersistenceHandler):
         self.statusRecords[currentStatus].remove(resourceKey)
         if (resourceInfo): self._save(self.resources, resourceKey, None, status, resourceInfo)
         else: self._save(self.resources, resourceKey, None, status, resourceInfo, False)
-        if (status == self.statusCodes["SUCCEDED"]): self.statusRecords[status] += 1
+        if (status == self.status.SUCCEDED): self.statusRecords[status] += 1
         else: self.statusRecords[status].append(resourceKey)
         
     def insert(self, resourcesList): 
@@ -104,24 +108,24 @@ class MemoryPersistenceHandler(BasePersistenceHandler):
                     continue
                 else: raise KeyError("Cannot insert resource, ID %s already exists." % resourceID)
             with self.insertLock:
-                if (not self.config["separateinsertlist"]): self.statusRecords[self.statusCodes["AVAILABLE"]].append(len(insertList))
+                if (not self.config["separateinsertlist"]): self.statusRecords[self.status.AVAILABLE].append(len(insertList))
                 if (self.config["uniqueresourceid"]): self.IDsHash[resourceID] = (insertList, len(insertList))
-                self._save(insertList, None, resourceID, self.statusCodes["AVAILABLE"], resourceInfo)
+                self._save(insertList, None, resourceID, self.status.AVAILABLE, resourceInfo)
         
     def count(self): 
         return (len(self.resources), 
-                self.statusRecords[self.statusCodes["SUCCEDED"]], 
-                len(self.statusRecords[self.statusCodes["INPROGRESS"]]), 
-                len(self.statusRecords[self.statusCodes["AVAILABLE"]]), 
-                len(self.statusRecords[self.statusCodes["FAILED"]]), 
-                len(self.statusRecords[self.statusCodes["ERROR"]]))
+                self.statusRecords[self.status.SUCCEDED], 
+                len(self.statusRecords[self.status.INPROGRESS]), 
+                len(self.statusRecords[self.status.AVAILABLE]), 
+                len(self.statusRecords[self.status.FAILED]), 
+                len(self.statusRecords[self.status.ERROR]))
         
     def reset(self, status): 
         resetList = self.statusRecords[status][:]
         for pk in resetList:
             self.statusRecords[status].remove(pk)
-            self._save(self.resources, pk, None, self.statusCodes["AVAILABLE"], None, False)
-            self.statusRecords[self.statusCodes["AVAILABLE"]].appendleft(pk)
+            self._save(self.resources, pk, None, self.status.AVAILABLE, None, False)
+            self.statusRecords[self.status.AVAILABLE].appendleft(pk)
         return len(resetList)
         
         
@@ -135,7 +139,7 @@ class FilePersistenceHandler(MemoryPersistenceHandler):
             if (not self.resources):
                 with open(self.config["selectfilename"], "r") as resourcesFile: resourcesList = json.load(resourcesFile)
                 for resource in resourcesList:
-                    if (resource["status"] == self.statusCodes["SUCCEDED"]): self.statusRecords[resource["status"]] += 1
+                    if (resource["status"] == self.status.SUCCEDED): self.statusRecords[resource["status"]] += 1
                     else: self.statusRecords[resource["status"]].append(len(self.resources))
                     if (self.config["uniqueresourceid"]): 
                         if (resource["id"] not in self.IDsHash): 
@@ -224,7 +228,7 @@ class MySQLPersistenceHandler(BasePersistenceHandler):
     def select(self):
         cursor = self.mysqlConnection.cursor()
         query = "UPDATE " + self.selectConfig["table"] + " SET resources_pk = LAST_INSERT_ID(resources_pk), status = %s WHERE status = %s ORDER BY resources_pk LIMIT 1"
-        cursor.execute(query, (self.statusCodes["INPROGRESS"], self.statusCodes["AVAILABLE"]))
+        cursor.execute(query, (self.status.INPROGRESS, self.status.AVAILABLE))
         query = "SELECT " + ", ".join(["resources_pk", "resource_id"] + self.selectConfig["infocolumn"]) + " FROM " + self.selectConfig["table"] + " WHERE resources_pk = LAST_INSERT_ID()"
         cursor.execute(query)
         resource = cursor.fetchone()
@@ -281,11 +285,11 @@ class MySQLPersistenceHandler(BasePersistenceHandler):
         
         counts = [0, 0, 0, 0, 0, 0]
         for row in result:
-            if (row[0] == self.statusCodes["SUCCEDED"]): counts[1] = row[1]
-            elif (row[0] == self.statusCodes["INPROGRESS"]): counts[2] = row[1]
-            elif (row[0] == self.statusCodes["AVAILABLE"]): counts[3] = row[1]
-            elif (row[0] == self.statusCodes["FAILED"]): counts[4] = row[1]
-            elif (row[0] == self.statusCodes["ERROR"]): counts[5] = row[1]
+            if (row[0] == self.status.SUCCEDED): counts[1] = row[1]
+            elif (row[0] == self.status.INPROGRESS): counts[2] = row[1]
+            elif (row[0] == self.status.AVAILABLE): counts[3] = row[1]
+            elif (row[0] == self.status.FAILED): counts[4] = row[1]
+            elif (row[0] == self.status.ERROR): counts[5] = row[1]
             counts[0] += row[1]
         
         return tuple(counts)
@@ -293,7 +297,7 @@ class MySQLPersistenceHandler(BasePersistenceHandler):
     def reset(self, status):
         cursor = self.mysqlConnection.cursor()
         query = "UPDATE " + self.selectConfig["table"] + " SET status = %s WHERE status = %s"
-        cursor.execute(query, (self.statusCodes["AVAILABLE"], status))
+        cursor.execute(query, (self.status.AVAILABLE, status))
         affectedRows = cursor.rowcount
         self.mysqlConnection.commit()
         cursor.close()

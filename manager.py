@@ -77,6 +77,7 @@ else:
     clientsStatusList = message["clients"]
     serverStatus = message["server"]
     serverStatus["time"]["start"] = datetime.utcfromtimestamp(serverStatus["time"]["start"])
+    dateTimeNow = datetime.now()
     
     # Raw status
     if (args.status == "raw"):
@@ -91,7 +92,7 @@ else:
                         serverStatus["counts"]["failed"], serverStatus["counts"]["error"]])
         status += "\n\n  Clients:\n"
         if (clientsStatusList): 
-            status += str("    [id, state, hostname, address, port, pid, start, lastrequest, meanservertime, meanclienttime, meancrawlertime, resource, amount]\n    ")
+            status += str("    [id, state, hostname, address, port, pid, start, lastrequest, agrserver, agrclient, agrcrawler, avgserver, avgclient, avgcrawler, resource, amount]\n    ")
         else: 
             status += "    No client connected right now.\n"
         for clientStatus in clientsStatusList:
@@ -102,13 +103,14 @@ else:
                         str(clientStatus["address"][1]), clientStatus["address"][2], clientStatus["pid"],
                         clientStatus["time"]["start"].strftime("%d/%m/%Y %H:%M:%S"), 
                         clientStatus["time"]["lastrequest"].strftime("%d/%m/%Y %H:%M:%S"),
-                        "%08.5f" % clientStatus["time"]["meanserver"],
-                        "%08.5f" % clientStatus["time"]["meanclient"],                        
-                        "%08.5f" % clientStatus["time"]["meancrawler"],
+                        "%.2f" % clientStatus["time"]["agrserver"], "%.2f" % clientStatus["time"]["agrclient"],
+                        "%.2f" % clientStatus["time"]["agrcrawler"], "%.2f" % clientStatus["time"]["avgserver"],
+                        "%.2f" % clientStatus["time"]["avgclient"], "%.2f" % clientStatus["time"]["avgcrawler"],
                         clientStatus["resourceid"] if (clientStatus["resourceid"]) else "waiting", 
                         clientStatus["amount"]])
             status += "\n    "
         status += "\n" + (" Status ").center(50, ':') + "\n"
+        
     # Extended status
     elif (args.status == "extended"):
         status = "\n" + (" Status ".center(50, ':')) + "\n\n"
@@ -118,7 +120,7 @@ else:
                 clientStatus["threadstate"] = " " if (clientStatus["threadstate"] == 0) else ("-" if (clientStatus["threadstate"] == -1) else "+")
                 clientStatus["time"]["start"] = datetime.utcfromtimestamp(clientStatus["time"]["start"])
                 clientStatus["time"]["lastrequest"] = datetime.utcfromtimestamp(clientStatus["time"]["lastrequest"])
-                elapsedTime = datetime.now() - clientStatus["time"]["start"]
+                elapsedTime = dateTimeNow - clientStatus["time"]["start"]
                 elapsedMinSec = divmod(elapsedTime.seconds, 60)
                 elapsedHoursMin = divmod(elapsedMinSec[0], 60)
                 status += "  %3s %s %s (%s:%s/%s): %s since %s [%d processed in %s]\n" % (
@@ -136,10 +138,11 @@ else:
                         )
         else:
             status += "  No client connected right now.\n"
-        status += "\n  " + (" Session Info ").center(46, '=') + "\n\n"
-        elapsedTime = datetime.now() - serverStatus["time"]["start"]
+
+        elapsedTime = dateTimeNow - serverStatus["time"]["start"]
         elapsedMinSec = divmod(elapsedTime.seconds, 60)
         elapsedHoursMin = divmod(elapsedMinSec[0], 60)
+        
         clientsTotal = float(len(clientsStatusList))
         connectedClients = float(len([client for client in clientsStatusList if client["threadstate"] == " "]))
         disconnectedClients = float(len([client for client in clientsStatusList if client["threadstate"] == "+"]))
@@ -147,6 +150,7 @@ else:
         connectedClientsPercent = ((connectedClients / clientsTotal) * 100) if (clientsTotal > 0) else 0.0
         disconnectedClientsPercent = ((disconnectedClients / clientsTotal) * 100) if (clientsTotal > 0) else 0.0
         removingClientsPercent = ((removingClients / clientsTotal) * 100) if (clientsTotal > 0) else 0.0
+        
         resourcesTotal = float(serverStatus["counts"]["total"])
         resourcesSucceeded = float(serverStatus["counts"]["succeeded"])
         resourcesInProgress = float(serverStatus["counts"]["inprogress"])
@@ -160,39 +164,72 @@ else:
         resourcesFailedPercent = ((resourcesFailed / resourcesTotal) * 100) if (resourcesTotal > 0) else 0.0
         resourcesErrorPercent = ((resourcesError / resourcesTotal) * 100) if (resourcesTotal > 0) else 0.0
         resourcesProcessedPercent = ((resourcesProcessed / resourcesTotal) * 100) if (resourcesTotal > 0) else 0.0
-        meanServerTime = sum([clientStatus["time"]["meanserver"] for clientStatus in clientsStatusList])
-        meanServerMinSec = divmod(meanServerTime / clientsTotal, 60) if (clientsTotal > 0) else (0,0)
-        meanServerHoursMin = divmod(meanServerMinSec[0], 60)
-        meanClientTime = sum([clientStatus["time"]["meanclient"] for clientStatus in clientsStatusList])
-        meanClientMinSec = divmod(meanClientTime/ clientsTotal, 60) if (clientsTotal > 0) else (0,0)
-        meanClientHoursMin = divmod(meanClientMinSec[0], 60)
-        meanCrawlerTime = sum([clientStatus["time"]["meancrawler"] for clientStatus in clientsStatusList])
-        meanCrawlerMinSec = divmod(meanCrawlerTime / clientsTotal, 60) if (clientsTotal > 0) else (0,0)
-        meanCrawlerHoursMin = divmod(meanCrawlerMinSec[0], 60)
+        
+        sumClientElapsedTime = sum([(dateTimeNow - clientStatus["time"]["start"]).seconds for clientStatus in clientsStatusList])
+        sumAgrServerTime = sum([clientStatus["time"]["agrserver"] for clientStatus in clientsStatusList])
+        fractionServerTime = sumAgrServerTime / sumClientElapsedTime if (sumClientElapsedTime > 0) else 0.0
+        proportionalServerTime = fractionServerTime * elapsedTime.seconds
+        proportionalServerMinSec = divmod(proportionalServerTime, 60)
+        proportionalServerHoursMin = divmod(proportionalServerMinSec[0], 60)
+        proportionalServerTimePercent = fractionServerTime * 100
+        sumAgrClientTime = sum([clientStatus["time"]["agrclient"] for clientStatus in clientsStatusList])
+        fractionClientTime = sumAgrClientTime / sumClientElapsedTime if (sumClientElapsedTime > 0) else 0.0
+        proportionalClientTime = fractionClientTime * elapsedTime.seconds
+        proportionalClientMinSec = divmod(proportionalClientTime, 60)
+        proportionalClientHoursMin = divmod(proportionalClientMinSec[0], 60)
+        proportionalClientTimePercent = fractionClientTime * 100
+        sumAgrCrawlerTime = sum([clientStatus["time"]["agrcrawler"] for clientStatus in clientsStatusList])
+        fractionCrawlerTime = sumAgrCrawlerTime / sumClientElapsedTime if (sumClientElapsedTime > 0) else 0.0
+        proportionalCrawlerTime = fractionCrawlerTime * elapsedTime.seconds
+        proportionalCrawlerMinSec = divmod(proportionalCrawlerTime, 60)
+        proportionalCrawlerHoursMin = divmod(proportionalCrawlerMinSec[0], 60)
+        proportionalCrawlerTimePercent = fractionCrawlerTime * 100
+        performanceIndicator = "good"
+        if (proportionalServerTimePercent >= 25): performanceIndicator = "moderate"
+        if (proportionalServerTimePercent >= 50): performanceIndicator = "bad"
+        if (proportionalServerTimePercent >= 75): performanceIndicator = "ugly"
+         
+        sumAvgServerTime = sum([clientStatus["time"]["avgserver"] for clientStatus in clientsStatusList])
+        avgServerMinSec = divmod(sumAvgServerTime / clientsTotal, 60) if (clientsTotal > 0) else (0,0)
+        avgServerHoursMin = divmod(avgServerMinSec[0], 60)
+        sumAvgClientTime = sum([clientStatus["time"]["avgclient"] for clientStatus in clientsStatusList])
+        avgClientMinSec = divmod(sumAvgClientTime/ clientsTotal, 60) if (clientsTotal > 0) else (0,0)
+        avgClientHoursMin = divmod(avgClientMinSec[0], 60)
+        sumAvgCrawlerTime = sum([clientStatus["time"]["avgcrawler"] for clientStatus in clientsStatusList])
+        avgCrawlerMinSec = divmod(sumAvgCrawlerTime / clientsTotal, 60) if (clientsTotal > 0) else (0,0)
+        avgCrawlerHoursMin = divmod(avgCrawlerMinSec[0], 60)
+        
         numResourcesProcessed = float(sum([clientStatus["amount"] for clientStatus in clientsStatusList]))
-        meanResourcesPerclient = numResourcesProcessed / clientsTotal if (clientsTotal > 0) else 0.0
-        meanResourcesPerSec = numResourcesProcessed / elapsedTime.seconds
-        meanTimePerResource = elapsedTime.seconds / numResourcesProcessed if (numResourcesProcessed > 0) else 0.0
-        meanResourceMinSec = divmod(meanTimePerResource, 60)
-        meanResourceHoursMin = divmod(meanResourceMinSec[0], 60)
-        estimatedTimeToFinish = meanTimePerResource * resourcesTotal
+        avgResourcesPerclient = numResourcesProcessed / clientsTotal if (clientsTotal > 0) else 0.0
+        avgResourcesPerSec = numResourcesProcessed / sumAgrClientTime if (sumAgrClientTime > 0) else 0.0
+        
+        estimatedTimeToFinish = (sumAvgCrawlerTime / clientsTotal) * resourcesTotal if (clientsTotal > 0) else 0.0
         estimatedMinSec = divmod(estimatedTimeToFinish, 60)
         estimatedHoursMin = divmod(estimatedMinSec[0], 60)
+        
+        status += "\n  " + (" Session Info ").center(46, '=') + "\n\n"
         status += "    Server state: %s\n" % serverStatus["state"]
         status += "      Server address: %s (%s:%s/%s)\n" % (serverAddress[0], serverAddress[1], serverAddress[2], serverStatus["pid"])
         status += "      Server uptime: %s\n" % ("%02d:%02d:%02d" % (elapsedHoursMin[0],  elapsedHoursMin[1], elapsedMinSec[1]))
-        status += "      Mean server time: %s\n" % ("%02d:%02d:%08.5f" % (meanServerHoursMin[0],  meanServerHoursMin[1], meanServerMinSec[1]))
-        status += "      Mean client time: %s\n" % ("%02d:%02d:%08.5f" % (meanClientHoursMin[0],  meanClientHoursMin[1], meanClientMinSec[1]))
-        status += "      Mean crawler time: %s\n" % ("%02d:%02d:%08.5f" % (meanCrawlerHoursMin[0],  meanCrawlerHoursMin[1], meanCrawlerMinSec[1]))
         status += "      Estimated time to finish: %s\n" % ("%02d:%02d:%02d" % (estimatedHoursMin[0],  estimatedHoursMin[1], estimatedMinSec[1]))
+        
+        status += "    Performance: %s\n" % performanceIndicator
+        status += "      Average proportional server time: %s (%.2f%%)\n" % ("%02d:%02d:%08.5f" % (proportionalServerHoursMin[0],  proportionalServerHoursMin[1], proportionalServerMinSec[1]), proportionalServerTimePercent)
+        status += "      Average proportional client time: %s (%.2f%%)\n" % ("%02d:%02d:%08.5f" % (proportionalClientHoursMin[0], proportionalClientHoursMin[1], proportionalClientMinSec[1]), proportionalClientTimePercent)
+        status += "      Average proportional crawler time: %s (%.2f%%)\n" % ("%02d:%02d:%08.5f" % (proportionalCrawlerHoursMin[0], proportionalCrawlerHoursMin[1], proportionalCrawlerMinSec[1]), proportionalCrawlerTimePercent)
+        status += "      Average server time per request: %s\n" % ("%02d:%02d:%08.5f" % (avgServerHoursMin[0],  avgServerHoursMin[1], avgServerMinSec[1]))
+        status += "      Average client time per response: %s\n" % ("%02d:%02d:%08.5f" % (avgClientHoursMin[0],  avgClientHoursMin[1], avgClientMinSec[1]))
+        status += "      Average crawler time per client: %s\n" % ("%02d:%02d:%08.5f" % (avgCrawlerHoursMin[0],  avgCrawlerHoursMin[1], avgCrawlerMinSec[1]))
+        
         status += "    Total number of clients: %d\n" % clientsTotal
         status += "      Connected clients: %d (%.2f%%)\n" % (connectedClients, connectedClientsPercent)
         status += "      Disconnected clients: %d (%.2f%%)\n" % (disconnectedClients, disconnectedClientsPercent)
         status += "      Clients being removed: %d (%.2f%%)\n" % (removingClients, removingClientsPercent)
+        
         status += "    Number of resources processed: %d\n" % numResourcesProcessed
-        status += "      Mean resources per client: %.2f\n" % meanResourcesPerclient
-        status += "      Mean resources per time unit: %.2f/h, %.2f/m, %.2f/s\n" % (meanResourcesPerSec * 3600, meanResourcesPerSec * 60, meanResourcesPerSec)
-        status += "      Mean time per resource: %02d:%02d:%08.5f\n" % (meanResourceHoursMin[0],  meanResourceHoursMin[1], meanResourceMinSec[1])
+        status += "      Average resources processed per client: %.2f\n" % avgResourcesPerclient
+        status += "      Average resources processed per time unit: %.2f/h, %.2f/m, %.2f/s\n" % (avgResourcesPerSec * 3600, avgResourcesPerSec * 60, avgResourcesPerSec)
+        
         status += "\n  " + (" Global Info ").center(46, '=') + "\n\n"
         status += "    Total number of resources: %d\n" % resourcesTotal
         status += "    Number of resources processed: %d (%.5f%%)\n" % (resourcesProcessed, resourcesProcessedPercent)
@@ -202,6 +239,7 @@ else:
         status += "      Failed: %d (%.5f%%)\n" % (resourcesFailed, resourcesFailedPercent)
         status += "      Error: %d (%.5f%%)\n" % (resourcesError, resourcesErrorPercent)
         status += "\n" + (" Status ").center(50, ':') + "\n"
+        
     # Basic status
     else:
         status = "\n" + (" Status (%s) " % serverAddress[0]).center(50, ':') + "\n\n"

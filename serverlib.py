@@ -30,9 +30,9 @@ clientsThreads = {}
 nextFreeID = 1
 
 # Timing variables
-serverSumTimes = {0: 0.0}
-clientSumTimes = {0: 0.0}
-crawlerSumTimes = {0: 0.0}
+serverAggregatedTimes = {0: 0.0}
+clientAggregatedTimes = {0: 0.0}
+crawlerAggregatedTimes = {0: 0.0}
 numTimingMeasures = {0: long(0)}
 numCrawlingMeasures = {0: long(0)}
 
@@ -63,9 +63,9 @@ class ServerHandler(SocketServer.BaseRequestHandler):
     def handle(self):
         # Declare global variables
         global nextFreeID
-        global serverSumTimes
-        global clientSumTimes
-        global crawlerSumTimes
+        global serverAggregatedTimes
+        global clientAggregatedTimes
+        global crawlerAggregatedTimes
         global numTimingMeasures
         global numCrawlingMeasures
     
@@ -74,7 +74,7 @@ class ServerHandler(SocketServer.BaseRequestHandler):
         echo = self.server.echo
         client = self.client
         persist = self.persist
-        status = self.persist.statusCodes
+        status = persistence.StatusCodes()
     
         # Start to handle
         clientID = 0
@@ -94,7 +94,7 @@ class ServerHandler(SocketServer.BaseRequestHandler):
                 if (not message): 
                     clientResourceKey = clientsInfo[clientID][2]
                     echo.default("Connection to client %d has been abruptly closed." % clientID, "ERROR")
-                    persist.update(clientResourceKey, status["ERROR"], None)
+                    persist.update(clientResourceKey, status.ERROR, None)
                     running = False
                     continue
 
@@ -113,9 +113,9 @@ class ServerHandler(SocketServer.BaseRequestHandler):
                             client.send({"command": "GIVE_LOGIN", "fail": True, "reason": "Cannot connect, server is %s." % self.server.state})
                             running = False
                             continue
-                    serverSumTimes[clientID] = 0.0
-                    clientSumTimes[clientID] = 0.0
-                    crawlerSumTimes[clientID] = 0.0
+                    serverAggregatedTimes[clientID] = 0.0
+                    clientAggregatedTimes[clientID] = 0.0
+                    crawlerAggregatedTimes[clientID] = 0.0
                     numTimingMeasures[clientID] = long(0)
                     numCrawlingMeasures[clientID] = long(0)
                     client.send({"command": "GIVE_LOGIN", "fail": False, "clientid": clientID})
@@ -170,8 +170,11 @@ class ServerHandler(SocketServer.BaseRequestHandler):
                     clientResourceKey = clientsInfo[clientID][2]
                     clientResourceID = clientsInfo[clientID][3]
                     clientResourceInfo = message["resourceinfo"]
-                    if (config["global"]["feedback"]): persist.insert(message["newresources"])
-                    persist.update(clientResourceKey, status["SUCCEDED"], clientResourceInfo)
+                    clientExtraInfo = message["extrainfo"]
+                    clientNewResources = message["newresources"]
+                    self.callbackFilters(clientResourceID, clientResourceInfo, clientExtraInfo, clientNewResources)
+                    if (config["global"]["feedback"]): persist.insert(clientNewResources)
+                    persist.update(clientResourceKey, status.SUCCEDED, clientResourceInfo)
                     client.send({"command": "DONE_RET"})
                             
                 elif (command == "EXCEPTION"):
@@ -179,11 +182,11 @@ class ServerHandler(SocketServer.BaseRequestHandler):
                     clientResourceID = clientsInfo[clientID][3]
                     if (message["type"] == "fail"):
                         echo.default("Client %s reported fail for resource %s." % (clientID, clientResourceID), "WARNING")
-                        persist.update(clientResourceKey, status["FAILED"], None)
+                        persist.update(clientResourceKey, status.FAILED, None)
                         client.send({"command": "EXCEPTION_RET"})
                     elif (message["type"] == "error"):
                         echo.default("Client %s reported error for resource %s. Connection closed." % (clientID, clientResourceID), "ERROR")
-                        persist.update(clientResourceKey, status["ERROR"], None)
+                        persist.update(clientResourceKey, status.ERROR, None)
                         running = False
                                     
                 elif (command == "GET_STATUS"):
@@ -199,9 +202,12 @@ class ServerHandler(SocketServer.BaseRequestHandler):
                         clientStatus["amount"] = info[4]
                         clientStatus["time"] = {"start": calendar.timegm(info[5].utctimetuple())}
                         clientStatus["time"]["lastrequest"] = calendar.timegm(info[6].utctimetuple())
-                        clientStatus["time"]["meanserver"] = serverSumTimes[ID] / numTimingMeasures[ID]
-                        clientStatus["time"]["meanclient"] = clientSumTimes[ID] / numTimingMeasures[ID]
-                        clientStatus["time"]["meancrawler"] = crawlerSumTimes[ID] / numCrawlingMeasures[ID] if (numCrawlingMeasures[ID] > 0) else 0
+                        clientStatus["time"]["agrserver"] = serverAggregatedTimes[ID]
+                        clientStatus["time"]["agrclient"] = clientAggregatedTimes[ID]
+                        clientStatus["time"]["agrcrawler"] = crawlerAggregatedTimes[ID]
+                        clientStatus["time"]["avgserver"] = serverAggregatedTimes[ID] / numTimingMeasures[ID]
+                        clientStatus["time"]["avgclient"] = clientAggregatedTimes[ID] / numTimingMeasures[ID]
+                        clientStatus["time"]["avgcrawler"] = crawlerAggregatedTimes[ID] / numCrawlingMeasures[ID] if (numCrawlingMeasures[ID] > 0) else 0
                         clientsStatusList.append(clientStatus)
                     # Server status
                     serverStatus = {"pid": os.getpid()}
@@ -245,7 +251,7 @@ class ServerHandler(SocketServer.BaseRequestHandler):
                     if (statusName == "INPROGRESS") and (clientsInfo): 
                         client.send({"command": "RESET_RET", "fail": True, "reason": "It is not possible to reset INPROGRESS resources while there are clients connected."})
                     else:
-                        resetCount = persist.reset(status[statusName])
+                        resetCount = persist.reset(getattr(status, statusName))
                         client.send({"command": "RESET_RET", "fail": False, "count": resetCount})
                     running = False
                         
@@ -264,11 +270,11 @@ class ServerHandler(SocketServer.BaseRequestHandler):
                     client.send({"command": "SD_RET", "fail": False})
                     
                 endServerTime = timeit.default_timer()
-                serverSumTimes[clientID] += (endServerTime - startServerTime)
-                clientSumTimes[clientID] += (endClientTime - startClientTime)
+                serverAggregatedTimes[clientID] += (endServerTime - startServerTime)
+                clientAggregatedTimes[clientID] += (endClientTime - startClientTime)
                 numTimingMeasures[clientID] += 1
-                if (command == "DONE_ID") or (command == "EXCEPTION"):
-                    crawlerSumTimes[clientID] += (endCrawlerTime - startCrawlerTime)
+                if (command == "DONE_ID"):
+                    crawlerAggregatedTimes[clientID] += (endCrawlerTime - startCrawlerTime)
                     numCrawlingMeasures[clientID] += 1
                     
             except Exception as error:
@@ -307,35 +313,59 @@ class ServerHandler(SocketServer.BaseRequestHandler):
             else:
                 return False
                 
-    def threadedFilterWrapper(self, filter, resourceID, resourceInfo, outputList):
-        data = filter.apply(resourceID, resourceInfo, None)
-        outputList.append({"filter": filter.getName(), "order": None, "data": data})
+    def threadedFilterApplyWrapper(self, filter, resourceID, resourceInfo, outputList):
+        data = filter.apply(resourceID, deepcopy(resourceInfo), None)
+        outputList.append({"filter": filter.name(), "order": None, "data": data})
+        
+    def threadedFilterCallbackWrapper(self, filter, resourceID, resourceInfo, newResources, extraInfo):
+        filter.callback(resourceID, deepcopy(resourceInfo), deepcopy(newResources), deepcopy(extraInfo))
                 
     def applyFilters(self, resourceID, resourceInfo):
         parallelFilters = self.parallelFilters
         sequentialFilters = self.sequentialFilters
-        filters = []
+        filtersData = []
     
         # Start threaded filters
         filterThreads = []
         for filter in parallelFilters:
-            t = threading.Thread(target=self.threadedFilterWrapper, args=(filter, resourceID, resourceInfo, filters))
+            t = threading.Thread(target=self.threadedFilterApplyWrapper, args=(filter, resourceID, resourceInfo, filtersData))
             filterThreads.append(t)
             t.start()
         
         # Execute sequential filters
-        data = {}
+        extraInfo = {}
         for filter in sequentialFilters:
-            data = filter.apply(resourceID, resourceInfo, data.copy())
-            filters.append({"name": filter.getName(), "order": sequentialFilters.index(filter), "data": data})
+            data = filter.apply(resourceID, deepcopy(resourceInfo), extraInfo)
+            filtersData.append({"name": filter.name(), "order": sequentialFilters.index(filter), "data": data})
             
         # Wait for threaded filters to finish
         for filter in filterThreads:
             filter.join()
         
-        return (filters if filters else None)
-                
-                
+        return (filtersData if (filtersData) else None)
+        
+    def callbackFilters(self, resourceID, resourceInfo, extraInfo, newResources):
+        parallelFilters = self.parallelFilters
+        sequentialFilters = self.sequentialFilters
+    
+        # Start threaded filters
+        filterThreads = []
+        for filter in parallelFilters:
+            t = threading.Thread(target=self.threadedFilterCallbackWrapper, args=(filter, resourceID, resourceInfo, newResources, extraInfo))
+            filterThreads.append(t)
+            t.start()
+        
+        # Execute sequential filters
+        extraInfoRef = {}
+        for filter in sequentialFilters:
+            extraInfoRef["original"] = deepcopy(extraInfo)
+            filter.callback(resourceID, resourceInfo, newResources, extraInfoRef)
+            
+        # Wait for threaded filters to finish
+        for filter in filterThreads:
+            filter.join()
+        
+            
 class ThreadedTCPServer(SocketServer.ThreadingMixIn, SocketServer.TCPServer):
     def __init__(self, configurationsDictionary):
         self.config = configurationsDictionary
