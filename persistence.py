@@ -1,12 +1,15 @@
 # -*- coding: iso-8859-1 -*-
 
+import os
 import threading
 import json
+import csv
 import common
 import mysql.connector
 from datetime import datetime
 from copy import deepcopy
 from collections import deque
+from collections import OrderedDict
 
 
 class StatusCodes():
@@ -135,9 +138,18 @@ class FilePersistenceHandler(MemoryPersistenceHandler):
 
     def __init__(self, configurationsDictionary): 
         self._extractConfig(configurationsDictionary)
+        if (self.config["selectfiletype"] == "json"): 
+            self._execLoad = self._jsonLoad
+            self._execSelectDump = self._jsonDump
+        else: 
+            self._execLoad = self._csvLoad
+            self._execSelectDump = self._csvDump
+        if (self.config["insertfiletype"] == "json"): self._execInsertDump = self._jsonDump
+        else: self._execInsertDump = self._csvDump
         with self.loadLock:
             if (not self.resources):
-                with open(self.config["selectfilename"], "r") as resourcesFile: resourcesList = json.load(resourcesFile)
+                self.columnNames = {"id", "status"}
+                resourcesList = self._execLoad()
                 for resource in resourcesList:
                     if (resource["status"] == self.status.SUCCEDED): self.statusRecords[resource["status"]] += 1
                     else: self.statusRecords[resource["status"]].append(len(self.resources))
@@ -159,24 +171,90 @@ class FilePersistenceHandler(MemoryPersistenceHandler):
         
         if ("insertfilename" not in self.config): self.config["insertfilename"] = self.config["selectfilename"]
         
+        if (os.path.splitext(self.config["selectfilename"])[1][1:].lower() == "json"): self.config["selectfiletype"] = "json"
+        elif (os.path.splitext(self.config["selectfilename"])[1][1:].lower() == "csv"): self.config["selectfiletype"] = "csv"
+        else: raise TypeError("Unknown file type in <selectfilename>.")
+        
+        if (os.path.splitext(self.config["insertfilename"])[1][1:].lower() == "json"): self.config["insertfiletype"] = "json"
+        elif (os.path.splitext(self.config["insertfilename"])[1][1:].lower() == "csv"): self.config["insertfiletype"] = "csv"
+        else: raise TypeError("Unknown file type in <insertfilename>.")
+        
         if (self.config["insertfilename"] == self.config["selectfilename"]): self.config["separateinsertlist"] = False
         else: self.config["separateinsertlist"] = True
         
-        if ("savetimedelta" not in self.config) or (int(self.config["savetimedelta"]) < 1): self.config["savetimedelta"] = 60
-        else: self.config["savetimedelta"] = int(self.config["savetimedelta"])
+        self.config["savetimedelta"] = int(self.config["savetimedelta"])
+        if (self.config["savetimedelta"] < 1): raise ValueError("Parameter savetimedelta must be greater than 1 second.")
         
+    def _jsonLoad(self): 
+        with open(self.config["selectfilename"], "r") as file: 
+            input = json.load(file, object_pairs_hook = OrderedDict)
+        self.columnNames = input["header"]
+        return input["resources"]
+
+    def _jsonDump(self, resourcesList, file): 
+        json.dump({"header": self.columnNames, "resources": resourcesList}, file)
+    
+    def _csvParseValue(self, value):
+        if (not value): return None
+        if (not value.startswith("\"")):
+            if value.lower() in ("true", "t"): return True
+            if value.lower() in ("false", "f"): return False       
+            if value.lower() in ("none", "null"): return None
+            if ("." in value): return float(value)
+            return int(value)
+        return value.strip("\"") 
+    
+    def _csvUnparseValue(self, value):
+        if isinstance(value, basestring): return "".join(("\"", value, "\""))
+        if isinstance(value, bool): return ("T" if (value) else "F")
+        return value
+    
+    def _csvLoad(self):
+        with open(self.config["selectfilename"], "r") as file: 
+            reader = csv.reader(file, quoting = csv.QUOTE_NONE)
+            self.columnNames = reader.next()
+            infocolumns = self.columnNames[2:]
+            for row in reader:
+                resource = {}
+                resource["id"] = self._csvParseValue(row[0])
+                resource["status"] = self._csvParseValue(row[1])
+                resource["info"] = None
+                if (infocolumns):
+                    resource["info"] = {}
+                    for column, value in map(None, infocolumns, row[2:]): resource["info"][column] = self._csvParseValue(value)
+                yield resource
+    
+    def _csvDump(self, resourcesList, file):
+        writer = csv.DictWriter(file, self.columnNames, quoting = csv.QUOTE_NONE, escapechar = "", quotechar = "", lineterminator = "\n")
+        writer.writeheader()
+        for resource in resourcesList:
+            row = {}
+            row["id"] = self._csvUnparseValue(resource["id"])
+            row["status"] = self._csvUnparseValue(resource["status"])
+            if (resource["info"]):
+                for key, value in resource["info"].iteritems():
+                    row[key] = self. _csvUnparseValue(value)
+            writer.writerow(row)
+                    
     def _save(self, list, pk, id, status, info, changeInfo = True):
         with self.saveLock: MemoryPersistenceHandler._save(self, list, pk, id, status, info, changeInfo)
         
     def _dump(self):
         with self.saveLock:
-            if (not FilePersistenceHandler.lastSaveTime): FilePersistenceHandler.lastSaveTime = datetime.now()
             elapsedTime = datetime.now() - FilePersistenceHandler.lastSaveTime
+            print elapsedTime
             if (elapsedTime.seconds >= self.config["savetimedelta"]):
-                with open(self.config["selectfilename"], "w") as output: json.dump(self.resources, output)
-                if (self.config["separateinsertlist"]): 
-                    with open(self.config["insertfilename"], "w") as output: json.dump(self.insertedResources, output)
+                with open(self.config["selectfilename"], "w") as selectFile: 
+                    self._execSelectDump(self.resources, selectFile)
+                if (self.insertedResources): 
+                    with open(self.config["insertfilename"], "w") as insertFile: 
+                        self._execInsertDump(self.insertedResources, insertFile)
                 FilePersistenceHandler.lastSaveTime = datetime.now()
+                
+    def select(self):
+        if (not FilePersistenceHandler.lastSaveTime): FilePersistenceHandler.lastSaveTime = datetime.now()
+        print self.resources
+        return MemoryPersistenceHandler.select(self)
         
     def update(self, resourceKey, status, resourceInfo): 
         MemoryPersistenceHandler.update(self, resourceKey, status, resourceInfo)
@@ -193,9 +271,11 @@ class FilePersistenceHandler(MemoryPersistenceHandler):
 
     def shutdown(self): 
         with self.saveLock:
-            with open(self.config["selectfilename"], "w") as output: json.dump(self.resources, output)
-            if (self.config["separateinsertlist"]): 
-                with open(self.config["insertfilename"], "w") as output: json.dump(self.insertedResources, output)
+            with open(self.config["selectfilename"], "w") as selectFile: 
+                    self._execSelectDump(self.resources, selectFile)
+            if (self.insertedResources): 
+                with open(self.config["insertfilename"], "w") as insertFile: 
+                    self._execInsertDump(self.insertedResources, insertFile)
         
         
 class MySQLPersistenceHandler(BasePersistenceHandler):

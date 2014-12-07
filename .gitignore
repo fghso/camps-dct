@@ -220,4 +220,5 @@ pip-log.txt
 *.out
 *.xml
 *.json
+*.csv
 
