@@ -80,7 +80,7 @@ class MemoryPersistenceHandler(BasePersistenceHandler):
     def _save(self, list, pk, id, status, info, changeInfo = True):
         if (pk is not None):
             if (status is not None): list[pk]["status"] = status
-            if (changeInfo): list[pk]["info"] = info
+            if (changeInfo): list[pk]["info"].update(info)
         else: 
             list.append({"id": id, "status": status, "info": info})
     
@@ -130,7 +130,7 @@ class MemoryPersistenceHandler(BasePersistenceHandler):
             self._save(self.resources, pk, None, self.status.AVAILABLE, None, False)
             self.statusRecords[self.status.AVAILABLE].appendleft(pk)
         return len(resetList)
-        
+            
         
 class FilePersistenceHandler(MemoryPersistenceHandler):
     saveLock = threading.Lock()
@@ -148,8 +148,8 @@ class FilePersistenceHandler(MemoryPersistenceHandler):
         else: self._execInsertDump = self._csvDump
         with self.loadLock:
             if (not self.resources):
-                self.columnNames = {"id", "status"}
-                resourcesList = self._execLoad()
+                file = open(self.config["selectfilename"], "r")
+                resourcesList = self._execLoad(file)
                 for resource in resourcesList:
                     if (resource["status"] == self.status.SUCCEDED): self.statusRecords[resource["status"]] += 1
                     else: self.statusRecords[resource["status"]].append(len(self.resources))
@@ -159,6 +159,7 @@ class FilePersistenceHandler(MemoryPersistenceHandler):
                         else: raise KeyError("Duplicated ID found in resources file: %s." % resource["id"])
                     if ("info" not in resource): resource["info"] = None
                     self.resources.append(resource)
+                file.close()
             
     def _extractConfig(self, configurationsDictionary):
         self.config = configurationsDictionary
@@ -185,14 +186,35 @@ class FilePersistenceHandler(MemoryPersistenceHandler):
         self.config["savetimedelta"] = int(self.config["savetimedelta"])
         if (self.config["savetimedelta"] < 1): raise ValueError("Parameter savetimedelta must be greater than 1 second.")
         
-    def _jsonLoad(self): 
-        with open(self.config["selectfilename"], "r") as file: 
-            input = json.load(file, object_pairs_hook = OrderedDict)
+    def _jsonLoad(self, file): 
+        input = json.load(file, object_pairs_hook = OrderedDict)
         self.columnNames = input["header"]
-        return input["resources"]
+        infoColumns = self.columnNames[2:]
+        for element in input["resources"]: 
+            resource = {}
+            resource["id"] = element["id"]
+            resource["status"] = element["status"]
+            if (infoColumns):
+                resource["info"] = OrderedDict()
+                for column in infoColumns:
+                    if (column in element): resource["info"][column] = element[column]
+                    else: resource["info"][column] = None
+            yield resource
 
-    def _jsonDump(self, resourcesList, file): 
-        json.dump({"header": self.columnNames, "resources": resourcesList}, file)
+    def _jsonDump(self, resourcesList, file):
+        file.write("{\"header\": %s, \"resources\": [" % json.dumps(self.columnNames))
+        infoColumns = self.columnNames[2:]
+        separator = ""
+        for resource in resourcesList:
+            element = OrderedDict()
+            element["id"] = resource["id"]
+            element["status"] = resource["status"]
+            if (resource["info"]): 
+                for key in resource["info"]: 
+                    if (resource["info"][key]): element[key] = resource["info"][key]
+            file.write("%s%s" % (separator, json.dumps(element)))
+            separator = ", "
+        file.write("]}")
     
     def _csvParseValue(self, value):
         if (not value): return None
@@ -209,23 +231,23 @@ class FilePersistenceHandler(MemoryPersistenceHandler):
         if isinstance(value, bool): return ("T" if (value) else "F")
         return value
     
-    def _csvLoad(self):
-        with open(self.config["selectfilename"], "r") as file: 
-            reader = csv.reader(file, quoting = csv.QUOTE_NONE)
-            self.columnNames = reader.next()
-            infocolumns = self.columnNames[2:]
-            for row in reader:
-                resource = {}
-                resource["id"] = self._csvParseValue(row[0])
-                resource["status"] = self._csvParseValue(row[1])
-                resource["info"] = None
-                if (infocolumns):
-                    resource["info"] = {}
-                    for column, value in map(None, infocolumns, row[2:]): resource["info"][column] = self._csvParseValue(value)
-                yield resource
+    def _csvLoad(self, file):
+        reader = csv.reader(file, quoting = csv.QUOTE_NONE)
+        self.columnNames = reader.next()
+        infoColumns = self.columnNames[2:]
+        for row in reader:
+            resource = {}
+            resource["id"] = self._csvParseValue(row[0])
+            resource["status"] = self._csvParseValue(row[1])
+            resource["info"] = None
+            if (infoColumns):
+                resource["info"] = {}
+                for column, value in map(None, infoColumns, row[2:]): 
+                    if (column): resource["info"][column] = self._csvParseValue(value)
+            yield resource
     
     def _csvDump(self, resourcesList, file):
-        writer = csv.DictWriter(file, self.columnNames, quoting = csv.QUOTE_NONE, escapechar = "", quotechar = "", lineterminator = "\n")
+        writer = csv.DictWriter(file, self.columnNames, quoting = csv.QUOTE_NONE, escapechar = "", quotechar = "", lineterminator = "\n", extrasaction = "ignore")
         writer.writeheader()
         for resource in resourcesList:
             row = {}
@@ -242,18 +264,19 @@ class FilePersistenceHandler(MemoryPersistenceHandler):
     def _dump(self):
         with self.saveLock:
             elapsedTime = datetime.now() - FilePersistenceHandler.lastSaveTime
-            print elapsedTime
             if (elapsedTime.seconds >= self.config["savetimedelta"]):
+                echo.default("Saving list of resources to disk...")
                 with open(self.config["selectfilename"], "w") as selectFile: 
                     self._execSelectDump(self.resources, selectFile)
                 if (self.insertedResources): 
+                    echo.default("Saving list of inserted resources to disk...")
                     with open(self.config["insertfilename"], "w") as insertFile: 
                         self._execInsertDump(self.insertedResources, insertFile)
+                echo.default("Done.")
                 FilePersistenceHandler.lastSaveTime = datetime.now()
                 
     def select(self):
         if (not FilePersistenceHandler.lastSaveTime): FilePersistenceHandler.lastSaveTime = datetime.now()
-        print self.resources
         return MemoryPersistenceHandler.select(self)
         
     def update(self, resourceKey, status, resourceInfo): 
@@ -281,7 +304,10 @@ class FilePersistenceHandler(MemoryPersistenceHandler):
 class MySQLPersistenceHandler(BasePersistenceHandler):
     def __init__(self, configurationsDictionary):
         self._extractConfig(configurationsDictionary)
-        self.mysqlConnection = mysql.connector.connect(user=self.selectConfig["user"], password=self.selectConfig["password"], host=self.selectConfig["host"], database=self.selectConfig["name"])
+        self.mysqlSelectConnection = mysql.connector.connect(user=self.selectConfig["user"], password=self.selectConfig["password"], host=self.selectConfig["host"], database=self.selectConfig["name"])
+        if (self.insertConfig["host"] != self.selectConfig["host"]) or (self.insertConfig["name"] != self.selectConfig["name"]):
+            self.mysqlInsertConnection = mysql.connector.connect(user=self.insertConfig["user"], password=self.insertConfig["password"], host=self.insertConfig["host"], database=self.insertConfig["name"])
+        else: self.mysqlInsertConnection = self.mysqlSelectConnection
         self.lastSelectID = None
                 
     def _extractConfig(self, configurationsDictionary):
@@ -302,17 +328,17 @@ class MySQLPersistenceHandler(BasePersistenceHandler):
         if ("host" not in self.insertConfig): self.insertConfig["host"] = self.selectConfig["host"]
         if ("name" not in self.insertConfig): self.insertConfig["name"] = self.selectConfig["name"]
         if ("table" not in self.insertConfig): self.insertConfig["table"] = self.selectConfig["table"]
-        if ("infocolumn" not in self.insertConfig): self.insertConfig["infocolumn"] = self.selectConfig["infocolumn"]
+        if ("infocolumn" not in self.insertConfig): self.insertConfig["infocolumn"] = []
         elif (not isinstance(self.insertConfig["infocolumn"], list)): self.insertConfig["infocolumn"] = [self.insertConfig["infocolumn"]]
         
     def select(self):
-        cursor = self.mysqlConnection.cursor()
+        cursor = self.mysqlSelectConnection.cursor()
         query = "UPDATE " + self.selectConfig["table"] + " SET resources_pk = LAST_INSERT_ID(resources_pk), status = %s WHERE status = %s ORDER BY resources_pk LIMIT 1"
         cursor.execute(query, (self.status.INPROGRESS, self.status.AVAILABLE))
         query = "SELECT " + ", ".join(["resources_pk", "resource_id"] + self.selectConfig["infocolumn"]) + " FROM " + self.selectConfig["table"] + " WHERE resources_pk = LAST_INSERT_ID()"
         cursor.execute(query)
         resource = cursor.fetchone()
-        self.mysqlConnection.commit()
+        self.mysqlSelectConnection.commit()
         cursor.close()
         if (resource) and (resource[0] != self.lastSelectID): 
             self.lastSelectID = resource[0]
@@ -320,18 +346,18 @@ class MySQLPersistenceHandler(BasePersistenceHandler):
         else: return (None, None, None)
         
     def update(self, resourceKey, status, resourceInfo):
-        cursor = self.mysqlConnection.cursor()
+        cursor = self.mysqlSelectConnection.cursor()
         if (not resourceInfo): 
             query = "UPDATE " + self.selectConfig["table"] + " SET status = %s WHERE resources_pk = %s"
             cursor.execute(query, (status, resourceKey))
         else: 
             query = "UPDATE " + self.selectConfig["table"] + " SET status = %s, " + " = %s, ".join(resourceInfo.keys()) + " = %s WHERE resources_pk = %s"
             cursor.execute(query, (status,) + tuple(resourceInfo.values()) + (resourceKey,))
-        self.mysqlConnection.commit()
+        self.mysqlSelectConnection.commit()
         cursor.close()
         
     def insert(self, resourcesList):
-        cursor = self.mysqlConnection.cursor()
+        cursor = self.mysqlInsertConnection.cursor()
         query = "INSERT INTO " + self.insertConfig["table"] + " (" + ", ".join(["resource_id"] + self.insertConfig["infocolumn"]) + ") VALUES "
         
         data = []
@@ -348,15 +374,14 @@ class MySQLPersistenceHandler(BasePersistenceHandler):
             
         query += ", ".join(values)
         if (self.config["ondupkeyupdate"]):
-            query += " ON DUPLICATE KEY UPDATE resource_id = VALUES(resource_id), " + ", ".join(["{0} = VALUES({0})".format(column) for column in self.insertConfig["infocolumn"]])
-            column 
-        
+            query += " ON DUPLICATE KEY UPDATE " + ", ".join(["{0} = VALUES({0})".format(column) for column in ["resource_id"] + self.insertConfig["infocolumn"]])
+            
         cursor.execute(query, data)
-        self.mysqlConnection.commit()        
+        self.mysqlInsertConnection.commit()        
         cursor.close()
         
     def count(self):
-        cursor = self.mysqlConnection.cursor()
+        cursor = self.mysqlSelectConnection.cursor()
         query = "SELECT status, count(*) FROM " + self.selectConfig["table"] + " GROUP BY status"
         
         cursor.execute(query)
@@ -375,14 +400,14 @@ class MySQLPersistenceHandler(BasePersistenceHandler):
         return tuple(counts)
         
     def reset(self, status):
-        cursor = self.mysqlConnection.cursor()
+        cursor = self.mysqlSelectConnection.cursor()
         query = "UPDATE " + self.selectConfig["table"] + " SET status = %s WHERE status = %s"
         cursor.execute(query, (self.status.AVAILABLE, status))
         affectedRows = cursor.rowcount
-        self.mysqlConnection.commit()
+        self.mysqlSelectConnection.commit()
         cursor.close()
         return affectedRows
         
     def close(self):
-        self.mysqlConnection.close()
+        self.mysqlSelectConnection.close()
         
