@@ -22,13 +22,12 @@ class StatusCodes():
 
 class BasePersistenceHandler():  
     status = StatusCodes()
-    
     def __init__(self, configurationsDictionary): pass # Receives a copy of everything in handler section of the XML configuration file as the parameter configurationsDictionary
-    def select(self): return (None, None, None) # Return a tuple: (resource unique key, resource id, resource info dictionary)
+    def select(self): return (None, None, None) # Returns a tuple: (resource unique key, resource id, resource info dictionary)
     def update(self, resourceKey, status, resourceInfo): pass
     def insert(self, resourcesList): pass # Receives a list of tuples: [(resource id, resource info dictionary), ...]
-    def count(self): return (0, 0, 0, 0, 0, 0) # Return a tuple: (total, succeeded, inprogress, available, failed, error)
-    def reset(self, status): return 0 # Return the number of resources reseted
+    def count(self): return (0, 0, 0, 0, 0, 0) # Returns a tuple: (total, succeeded, inprogress, available, failed, error)
+    def reset(self, status): return 0 # Returns the number of resources reseted
     def close(self): pass # Called when a connection to a client is finished
     def shutdown(self): pass # Called when server is shut down, allowing to free shared resources
         
@@ -133,23 +132,113 @@ class MemoryPersistenceHandler(BasePersistenceHandler):
             
         
 class FilePersistenceHandler(MemoryPersistenceHandler):
+    class GenericFileTypeHandler():
+        def __init__(self, idColumnName, statusColumnName):
+            self.selectColNames = None
+            self.idColumn = idColumnName
+            self.statusColumn = statusColumnName
+            self.selectExcludeColNames = (self.idColumn, self.statusColumn)
+            self.insertExcludeColNames = (self.idColumn,)
+        def getFileColNames(self, file): return [] # Returns the column names specified in the file as a sequence (list or tuple) or None if no column name could be found
+        def load(self, file): yield None # Generator that yields resources in the format {"id": X, "status": X, "info": {...}}
+        def dump(self, resourcesList, columnNames, file): pass
+       
+    class JSONHandler(GenericFileTypeHandler):    
+        def getFileColNames(self, file):
+            input = None
+            try: input = json.load(file)["columns"]
+            except (ValueError, KeyError): pass
+            return input
+            
+        def load(self, file): 
+            input = json.load(file)
+            self.selectColNames = input["columns"]
+            selectInfoColNames = [name for name in self.selectColNames if (name not in self.selectExcludeColNames)]
+            for element in input["resources"]: 
+                resource = {"id": element[self.idColumn]}
+                if (self.statusColumn in element): resource["status"] = element[self.statusColumn]
+                else: resource["status"] = 0
+                if (selectInfoColNames):
+                    resource["info"] = {}
+                    for column in selectInfoColNames:
+                        if (column in element): resource["info"][column] = element[column]
+                        else: resource["info"][column] = None
+                yield resource
+
+        def dump(self, resourcesList, columnNames, file):
+            file.write("{\"columns\": %s, \"resources\": [" % json.dumps(columnNames))
+            insertInfoColNames = [name for name in columnNames if (name not in self.insertExcludeColNames)]
+            separator = ""
+            for resource in resourcesList:
+                element = {self.idColumn: resource["id"]}
+                if (resource["status"] != 0): element[self.statusColumn] = resource["status"]
+                if (resource["info"]): 
+                    for key, value in resource["info"].iteritems(): 
+                        if (value) and (key in insertInfoColNames): element[key] = value
+                file.write("%s%s" % (separator, json.dumps(element)))
+                separator = ", "
+            file.write("]}")
+    
+    class CSVHandler(GenericFileTypeHandler):
+        def _csvParseValue(self, value):
+            if (not value): return None
+            if (not value.startswith("\"")):
+                if value.lower() in ("true", "t"): return True
+                if value.lower() in ("false", "f"): return False       
+                if value.lower() in ("none", "null"): return None
+                if ("." in value): return float(value)
+                return int(value)
+            return value.strip("\"") 
+        
+        def _csvUnparseValue(self, value):
+            if isinstance(value, basestring): return "".join(("\"", value, "\""))
+            if isinstance(value, bool): return ("T" if (value) else "F")
+            return value
+            
+        def getFileColNames(self, file):
+            reader = csv.DictReader(file, quoting = csv.QUOTE_NONE)
+            return reader.fieldnames
+        
+        def load(self, file):
+            reader = csv.DictReader(file, quoting = csv.QUOTE_NONE)
+            self.selectColNames = reader.fieldnames
+            selectInfoColNames = [name for name in self.selectColNames if (name not in self.selectExcludeColNames)]
+            for row in reader:
+                resource = {"id": self._csvParseValue(row[self.idColumn])}
+                if (row[self.statusColumn]): 
+                    resource["status"] = self._csvParseValue(row[self.statusColumn])
+                else: resource["status"] = 0
+                if (selectInfoColNames):
+                    resource["info"] = {}
+                    for column in selectInfoColNames:
+                        resource["info"][column] = self._csvParseValue(row[column])
+                yield resource
+        
+        def dump(self, resourcesList, columnNames, file):
+            writer = csv.DictWriter(file, columnNames, quoting = csv.QUOTE_NONE, escapechar = "", quotechar = "", lineterminator = "\n", extrasaction = "ignore")
+            writer.writeheader()
+            insertInfoColNames = [name for name in columnNames if (name not in self.insertExcludeColNames)]
+            for resource in resourcesList:
+                row = {self.idColumn: self._csvUnparseValue(resource["id"])}
+                if (resource["status"] != 0): row[self.statusColumn] = self._csvUnparseValue(resource["status"])
+                if (resource["info"]):
+                    for key, value in resource["info"].iteritems():
+                        if (value) and (key in insertInfoColNames): row[key] = self._csvUnparseValue(value)
+                writer.writerow(row)
+    
     saveLock = threading.Lock()
     lastSaveTime = None
+    selectColNames = None
+    insertColNames = None
 
     def __init__(self, configurationsDictionary): 
         self._extractConfig(configurationsDictionary)
-        if (self.config["selectfiletype"] == "json"): 
-            self._execLoad = self._jsonLoad
-            self._execSelectDump = self._jsonDump
-        else: 
-            self._execLoad = self._csvLoad
-            self._execSelectDump = self._csvDump
-        if (self.config["insertfiletype"] == "json"): self._execInsertDump = self._jsonDump
-        else: self._execInsertDump = self._csvDump
+        self.echo = common.EchoHandler()
+        self._setFileHandlers()
         with self.loadLock:
             if (not self.resources):
-                file = open(self.config["selectfilename"], "r")
-                resourcesList = self._execLoad(file)
+                file = open(self.selectConfig["filename"], "r")
+                resourcesList = self.selectHandler.load(file)
                 for resource in resourcesList:
                     if (resource["status"] == self.status.SUCCEDED): self.statusRecords[resource["status"]] += 1
                     else: self.statusRecords[resource["status"]].append(len(self.resources))
@@ -160,9 +249,14 @@ class FilePersistenceHandler(MemoryPersistenceHandler):
                     if ("info" not in resource): resource["info"] = None
                     self.resources.append(resource)
                 file.close()
+                FilePersistenceHandler.selectColNames = self.selectHandler.selectColNames
+                self._setInsertColNames()
             
     def _extractConfig(self, configurationsDictionary):
         self.config = configurationsDictionary
+        self.selectConfig = configurationsDictionary["select"]
+        if ("insert" not in configurationsDictionary): self.insertConfig = self.selectConfig
+        else: self.insertConfig = configurationsDictionary["insert"]
         
         if ("uniqueresourceid" not in self.config): self.config["uniqueresourceid"] = False
         else: self.config["uniqueresourceid"] = common.str2bool(self.config["uniqueresourceid"])
@@ -170,110 +264,73 @@ class FilePersistenceHandler(MemoryPersistenceHandler):
         if ("ondupkeyupdate" not in self.config): self.config["ondupkeyupdate"] = False
         else: self.config["ondupkeyupdate"] = common.str2bool(self.config["ondupkeyupdate"])
         
-        if ("insertfilename" not in self.config): self.config["insertfilename"] = self.config["selectfilename"]
-        
-        if (os.path.splitext(self.config["selectfilename"])[1][1:].lower() == "json"): self.config["selectfiletype"] = "json"
-        elif (os.path.splitext(self.config["selectfilename"])[1][1:].lower() == "csv"): self.config["selectfiletype"] = "csv"
-        else: raise TypeError("Unknown file type in <selectfilename>.")
-        
-        if (os.path.splitext(self.config["insertfilename"])[1][1:].lower() == "json"): self.config["insertfiletype"] = "json"
-        elif (os.path.splitext(self.config["insertfilename"])[1][1:].lower() == "csv"): self.config["insertfiletype"] = "csv"
-        else: raise TypeError("Unknown file type in <insertfilename>.")
-        
-        if (self.config["insertfilename"] == self.config["selectfilename"]): self.config["separateinsertlist"] = False
-        else: self.config["separateinsertlist"] = True
-        
         self.config["savetimedelta"] = int(self.config["savetimedelta"])
         if (self.config["savetimedelta"] < 1): raise ValueError("Parameter savetimedelta must be greater than 1 second.")
         
-    def _jsonLoad(self, file): 
-        input = json.load(file, object_pairs_hook = OrderedDict)
-        self.columnNames = input["header"]
-        infoColumns = self.columnNames[2:]
-        for element in input["resources"]: 
-            resource = {}
-            resource["id"] = element["id"]
-            resource["status"] = element["status"]
-            if (infoColumns):
-                resource["info"] = OrderedDict()
-                for column in infoColumns:
-                    if (column in element): resource["info"][column] = element[column]
-                    else: resource["info"][column] = None
-            yield resource
-
-    def _jsonDump(self, resourcesList, file):
-        file.write("{\"header\": %s, \"resources\": [" % json.dumps(self.columnNames))
-        infoColumns = self.columnNames[2:]
-        separator = ""
-        for resource in resourcesList:
-            element = OrderedDict()
-            element["id"] = resource["id"]
-            element["status"] = resource["status"]
-            if (resource["info"]): 
-                for key in resource["info"]: 
-                    if (resource["info"][key]): element[key] = resource["info"][key]
-            file.write("%s%s" % (separator, json.dumps(element)))
-            separator = ", "
-        file.write("]}")
+        if (self.insertConfig["filename"] == self.selectConfig["filename"]): self.config["separateinsertlist"] = False
+        else: self.config["separateinsertlist"] = True
+        
+        if ("resourceidcolumn" not in self.insertConfig): 
+            self.insertConfig["resourceidcolumn"] = self.selectConfig["resourceidcolumn"]
+        if ("statuscolumn" not in self.insertConfig): 
+            self.insertConfig["statuscolumn"] = self.selectConfig["statuscolumn"]
     
-    def _csvParseValue(self, value):
-        if (not value): return None
-        if (not value.startswith("\"")):
-            if value.lower() in ("true", "t"): return True
-            if value.lower() in ("false", "f"): return False       
-            if value.lower() in ("none", "null"): return None
-            if ("." in value): return float(value)
-            return int(value)
-        return value.strip("\"") 
+    # Define internal file handler based on file type. Change this function to add support to other file types
+    def _setFileHandlers(self):
+        selectIDColumn = self.selectConfig["resourceidcolumn"]
+        selectStatusColumn = self.selectConfig["statuscolumn"]
+        insertIDColumn = self.insertConfig["resourceidcolumn"]
+        insertStatusColumn = self.insertConfig["statuscolumn"]
     
-    def _csvUnparseValue(self, value):
-        if isinstance(value, basestring): return "".join(("\"", value, "\""))
-        if isinstance(value, bool): return ("T" if (value) else "F")
-        return value
-    
-    def _csvLoad(self, file):
-        reader = csv.reader(file, quoting = csv.QUOTE_NONE)
-        self.columnNames = reader.next()
-        infoColumns = self.columnNames[2:]
-        for row in reader:
-            resource = {}
-            resource["id"] = self._csvParseValue(row[0])
-            resource["status"] = self._csvParseValue(row[1])
-            resource["info"] = None
-            if (infoColumns):
-                resource["info"] = {}
-                for column, value in map(None, infoColumns, row[2:]): 
-                    if (column): resource["info"][column] = self._csvParseValue(value)
-            yield resource
-    
-    def _csvDump(self, resourcesList, file):
-        writer = csv.DictWriter(file, self.columnNames, quoting = csv.QUOTE_NONE, escapechar = "", quotechar = "", lineterminator = "\n", extrasaction = "ignore")
-        writer.writeheader()
-        for resource in resourcesList:
-            row = {}
-            row["id"] = self._csvUnparseValue(resource["id"])
-            row["status"] = self._csvUnparseValue(resource["status"])
-            if (resource["info"]):
-                for key, value in resource["info"].iteritems():
-                    row[key] = self. _csvUnparseValue(value)
-            writer.writerow(row)
-                    
+        # Extract file types based on file extensions
+        selectFileType = os.path.splitext(self.selectConfig["filename"])[1][1:].lower()
+        insertFileType = os.path.splitext(self.insertConfig["filename"])[1][1:].lower()
+        
+        # Select handler
+        if (selectFileType == "json"): self.selectHandler = self.JSONHandler(selectIDColumn, selectStatusColumn)
+        elif (selectFileType == "csv"): self.selectHandler = self.CSVHandler(selectIDColumn, selectStatusColumn)
+        else: raise TypeError("Unknown file type '%s'." % self.selectConfig["filename"])
+        
+        # Insert handler
+        if (insertFileType == "json"): self.insertHandler = self.JSONHandler(insertIDColumn, insertStatusColumn)
+        elif (insertFileType == "csv"): self.insertHandler = self.CSVHandler(insertIDColumn, insertStatusColumn)
+        else: raise TypeError("Unknown file type '%s'." % self.insertConfig["filename"])
+            
+    def _setInsertColNames(self):
+        if (self.config["separateinsertlist"]): 
+            if (os.path.exists(self.insertConfig["filename"])):
+                with open(self.insertConfig["filename"], "r") as file: 
+                    FilePersistenceHandler.insertColNames = self.insertHandler.getFileColNames(file)
+        if (not FilePersistenceHandler.insertColNames): 
+            FilePersistenceHandler.insertColNames = FilePersistenceHandler.selectColNames
+            
     def _save(self, list, pk, id, status, info, changeInfo = True):
         with self.saveLock: MemoryPersistenceHandler._save(self, list, pk, id, status, info, changeInfo)
         
-    def _dump(self):
+    def _checkTimeDelta(self):
         with self.saveLock:
             elapsedTime = datetime.now() - FilePersistenceHandler.lastSaveTime
             if (elapsedTime.seconds >= self.config["savetimedelta"]):
-                echo.default("Saving list of resources to disk...")
-                with open(self.config["selectfilename"], "w") as selectFile: 
-                    self._execSelectDump(self.resources, selectFile)
-                if (self.insertedResources): 
-                    echo.default("Saving list of inserted resources to disk...")
-                    with open(self.config["insertfilename"], "w") as insertFile: 
-                        self._execInsertDump(self.insertedResources, insertFile)
-                echo.default("Done.")
+                self._dump()
                 FilePersistenceHandler.lastSaveTime = datetime.now()
+        
+    def _dump(self):
+        self.echo.default("Saving list of resources to disk...")
+        with open("dump.temp", "w") as tempFile: 
+            self.selectHandler.dump(self.resources, self.selectColNames, tempFile)
+        try: os.rename("dump.temp", self.selectConfig["filename"])
+        except WindowsError: 
+            os.remove(self.selectConfig["filename"])
+            os.rename("dump.temp", self.selectConfig["filename"])
+        if (self.insertedResources): 
+            self.echo.default("Saving list of inserted resources to disk...")
+            with open("dump.temp", "w") as tempFile: 
+                self.insertHandler.dump(self.insertedResources, self.insertColNames, tempFile)
+            try: os.rename("dump.temp", self.insertConfig["filename"])
+            except WindowsError: 
+                os.remove(self.insertConfig["filename"])
+                os.rename("dump.temp", self.insertConfig["filename"])
+        self.echo.default("Done.")
                 
     def select(self):
         if (not FilePersistenceHandler.lastSaveTime): FilePersistenceHandler.lastSaveTime = datetime.now()
@@ -281,91 +338,113 @@ class FilePersistenceHandler(MemoryPersistenceHandler):
         
     def update(self, resourceKey, status, resourceInfo): 
         MemoryPersistenceHandler.update(self, resourceKey, status, resourceInfo)
-        self._dump()
+        self._checkTimeDelta()
         
     def insert(self, resourcesList): 
         MemoryPersistenceHandler.insert(self, resourcesList)
-        self._dump()
+        self._checkTimeDelta()
         
     def reset(self, status):    
         resetedCount = MemoryPersistenceHandler.reset(self, status)    
-        self._dump()
+        self._checkTimeDelta()
         return resetedCount
 
     def shutdown(self): 
-        with self.saveLock:
-            with open(self.config["selectfilename"], "w") as selectFile: 
-                    self._execSelectDump(self.resources, selectFile)
-            if (self.insertedResources): 
-                with open(self.config["insertfilename"], "w") as insertFile: 
-                    self._execInsertDump(self.insertedResources, insertFile)
+        with self.saveLock: self._dump()
         
         
 class MySQLPersistenceHandler(BasePersistenceHandler):
     def __init__(self, configurationsDictionary):
         self._extractConfig(configurationsDictionary)
-        self.mysqlSelectConnection = mysql.connector.connect(user=self.selectConfig["user"], password=self.selectConfig["password"], host=self.selectConfig["host"], database=self.selectConfig["name"])
-        if (self.insertConfig["host"] != self.selectConfig["host"]) or (self.insertConfig["name"] != self.selectConfig["name"]):
-            self.mysqlInsertConnection = mysql.connector.connect(user=self.insertConfig["user"], password=self.insertConfig["password"], host=self.insertConfig["host"], database=self.insertConfig["name"])
-        else: self.mysqlInsertConnection = self.mysqlSelectConnection
         self.lastSelectID = None
+        
+        # Select connection
+        self.mysqlSelectConnection = mysql.connector.connect(user=self.selectConfig["user"], password=self.selectConfig["password"], host=self.selectConfig["host"], database=self.selectConfig["name"])
+        self.selectColNames = self._getColNames(self.mysqlSelectConnection, self.selectConfig["table"])
+        self.selectExcludeColNames = (self.selectConfig["primarykeycolumn"], self.selectConfig["resourceidcolumn"], self.selectConfig["statuscolumn"])
+        self.selectInfoColNames = [name for name in self.selectColNames if (name not in self.selectExcludeColNames)]
+        
+        # Insert connection
+        if ((self.insertConfig["host"] != self.selectConfig["host"]) 
+            or (self.insertConfig["name"] != self.selectConfig["name"])):
+            self.mysqlInsertConnection = mysql.connector.connect(user=self.insertConfig["user"], password=self.insertConfig["password"], host=self.insertConfig["host"], database=self.insertConfig["name"])
+            colNames = self._getColNames(self.mysqlInsertConnection, self.insertConfig["table"])
+            self.insertColNames = [name for name in colNames if (name != self.insertConfig["resourceidcolumn"])]
+        else: 
+            self.mysqlInsertConnection = self.mysqlSelectConnection
+            self.insertColNames = [name for name in self.selectColNames if (name != self.insertConfig["resourceidcolumn"])]
+        self.insertExcludeColNames = (self.insertConfig["primarykeycolumn"], self.insertConfig["statuscolumn"])
+        self.insertInfoColNames = [name for name in self.insertColNames if (name not in self.insertExcludeColNames)]
                 
     def _extractConfig(self, configurationsDictionary):
         self.config = configurationsDictionary
         self.selectConfig = configurationsDictionary["select"]
         if ("insert" not in configurationsDictionary): self.insertConfig = self.selectConfig
         else: self.insertConfig = configurationsDictionary["insert"]
-    
+        
         # Set default values
         if ("ondupkeyupdate" not in self.config): self.config["ondupkeyupdate"] = False
         else: self.config["ondupkeyupdate"] = common.str2bool(self.config["ondupkeyupdate"])
-        
-        if ("infocolumn" not in self.selectConfig): self.selectConfig["infocolumn"] = []
-        elif (not isinstance(self.selectConfig["infocolumn"], list)): self.selectConfig["infocolumn"] = [self.selectConfig["infocolumn"]]
         
         if ("user" not in self.insertConfig): self.insertConfig["user"] = self.selectConfig["user"]
         if ("password" not in self.insertConfig): self.insertConfig["password"] = self.selectConfig["password"]
         if ("host" not in self.insertConfig): self.insertConfig["host"] = self.selectConfig["host"]
         if ("name" not in self.insertConfig): self.insertConfig["name"] = self.selectConfig["name"]
         if ("table" not in self.insertConfig): self.insertConfig["table"] = self.selectConfig["table"]
-        if ("infocolumn" not in self.insertConfig): self.insertConfig["infocolumn"] = []
-        elif (not isinstance(self.insertConfig["infocolumn"], list)): self.insertConfig["infocolumn"] = [self.insertConfig["infocolumn"]]
+        if ("primarykeycolumn" not in self.insertConfig): 
+            self.insertConfig["primarykeycolumn"] = self.selectConfig["primarykeycolumn"]
+        if ("resourceidcolumn" not in self.insertConfig): 
+            self.insertConfig["resourceidcolumn"] = self.selectConfig["resourceidcolumn"]
+        if ("statuscolumn" not in self.insertConfig): 
+            self.insertConfig["statuscolumn"] = self.selectConfig["statuscolumn"]
+        
+    def _getColNames(self, mysqlConnection, tableName):
+        cursor = mysqlConnection.cursor()
+        query = "SELECT * FROM " + tableName + " LIMIT 0"
+        cursor.execute(query)
+        cursor.fetchall()
+        colNames = cursor.column_names
+        cursor.close()
+        return colNames
         
     def select(self):
-        cursor = self.mysqlSelectConnection.cursor()
-        query = "UPDATE " + self.selectConfig["table"] + " SET resources_pk = LAST_INSERT_ID(resources_pk), status = %s WHERE status = %s ORDER BY resources_pk LIMIT 1"
+        cursor = self.mysqlSelectConnection.cursor(dictionary = True)
+        query = "UPDATE " + self.selectConfig["table"] + " SET " + self.selectConfig["primarykeycolumn"] + " = LAST_INSERT_ID(" + self.selectConfig["primarykeycolumn"] + "), " + self.selectConfig["statuscolumn"] + " = %s WHERE " + self.selectConfig["statuscolumn"] + " = %s ORDER BY " + self.selectConfig["primarykeycolumn"] + " LIMIT 1"
         cursor.execute(query, (self.status.INPROGRESS, self.status.AVAILABLE))
-        query = "SELECT " + ", ".join(["resources_pk", "resource_id"] + self.selectConfig["infocolumn"]) + " FROM " + self.selectConfig["table"] + " WHERE resources_pk = LAST_INSERT_ID()"
+        query = "SELECT * FROM " + self.selectConfig["table"] + " WHERE " + self.selectConfig["primarykeycolumn"] + " = LAST_INSERT_ID()"
         cursor.execute(query)
         resource = cursor.fetchone()
         self.mysqlSelectConnection.commit()
         cursor.close()
-        if (resource) and (resource[0] != self.lastSelectID): 
-            self.lastSelectID = resource[0]
-            return (resource[0], resource[1], dict(zip(self.selectConfig["infocolumn"], resource[2:])))
+        if (resource) and (resource[self.selectConfig["primarykeycolumn"]] != self.lastSelectID): 
+            self.lastSelectID = resource[self.selectConfig["primarykeycolumn"]]
+            return (resource[self.selectConfig["primarykeycolumn"]], 
+                    resource[self.selectConfig["resourceidcolumn"]], 
+                    {k: resource[k] for k in self.selectInfoColNames})
         else: return (None, None, None)
         
     def update(self, resourceKey, status, resourceInfo):
         cursor = self.mysqlSelectConnection.cursor()
         if (not resourceInfo): 
-            query = "UPDATE " + self.selectConfig["table"] + " SET status = %s WHERE resources_pk = %s"
+            query = "UPDATE " + self.selectConfig["table"] + " SET " + self.selectConfig["statuscolumn"] + " = %s WHERE " + self.selectConfig["primarykeycolumn"] + " = %s"
             cursor.execute(query, (status, resourceKey))
         else: 
-            query = "UPDATE " + self.selectConfig["table"] + " SET status = %s, " + " = %s, ".join(resourceInfo.keys()) + " = %s WHERE resources_pk = %s"
-            cursor.execute(query, (status,) + tuple(resourceInfo.values()) + (resourceKey,))
+            info = {k: resourceInfo[k] for k in resourceInfo if (k not in self.selectExcludeColNames)}
+            query = "UPDATE " + self.selectConfig["table"] + " SET " + self.selectConfig["statuscolumn"] + " = %s, " + " = %s, ".join(info.keys()) + " = %s WHERE " + self.selectConfig["primarykeycolumn"] + " = %s"
+            cursor.execute(query, (status,) + tuple(info.values()) + (resourceKey,))
         self.mysqlSelectConnection.commit()
         cursor.close()
         
     def insert(self, resourcesList):
         cursor = self.mysqlInsertConnection.cursor()
-        query = "INSERT INTO " + self.insertConfig["table"] + " (" + ", ".join(["resource_id"] + self.insertConfig["infocolumn"]) + ") VALUES "
+        query = "INSERT INTO " + self.insertConfig["table"] + " (" + ", ".join([self.insertConfig["resourceidcolumn"]] + self.insertColNames) + ") VALUES "
         
         data = []
         values = []
         for resourceID, resourceInfo in resourcesList: 
             resourceValues = [str(resourceID)]
             if (not resourceInfo): resourceInfo = {}
-            for column in self.insertConfig["infocolumn"]:
+            for column in self.insertColNames:
                 if (column in resourceInfo): 
                     resourceValues.append("%s")
                     data.append(resourceInfo[column])
@@ -374,7 +453,7 @@ class MySQLPersistenceHandler(BasePersistenceHandler):
             
         query += ", ".join(values)
         if (self.config["ondupkeyupdate"]):
-            query += " ON DUPLICATE KEY UPDATE " + ", ".join(["{0} = VALUES({0})".format(column) for column in ["resource_id"] + self.insertConfig["infocolumn"]])
+            query += " ON DUPLICATE KEY UPDATE " + ", ".join(["{0} = VALUES({0})".format(column) for column in [self.insertConfig["resourceidcolumn"]] + self.insertInfoColNames])
             
         cursor.execute(query, data)
         self.mysqlInsertConnection.commit()        
@@ -382,7 +461,7 @@ class MySQLPersistenceHandler(BasePersistenceHandler):
         
     def count(self):
         cursor = self.mysqlSelectConnection.cursor()
-        query = "SELECT status, count(*) FROM " + self.selectConfig["table"] + " GROUP BY status"
+        query = "SELECT " + self.selectConfig["statuscolumn"] + ", count(*) FROM " + self.selectConfig["table"] + " GROUP BY " + self.selectConfig["statuscolumn"]
         
         cursor.execute(query)
         result = cursor.fetchall()
@@ -401,7 +480,7 @@ class MySQLPersistenceHandler(BasePersistenceHandler):
         
     def reset(self, status):
         cursor = self.mysqlSelectConnection.cursor()
-        query = "UPDATE " + self.selectConfig["table"] + " SET status = %s WHERE status = %s"
+        query = "UPDATE " + self.selectConfig["table"] + " SET " + self.selectConfig["statuscolumn"] + " = %s WHERE " + self.selectConfig["statuscolumn"] + " = %s"
         cursor.execute(query, (self.status.AVAILABLE, status))
         affectedRows = cursor.rowcount
         self.mysqlSelectConnection.commit()
