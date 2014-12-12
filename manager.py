@@ -203,7 +203,7 @@ else:
         avgResourcesPerclient = numResourcesProcessed / clientsTotal if (clientsTotal > 0) else 0.0
         avgResourcesPerSec = numResourcesProcessed / sumAgrClientTime if (sumAgrClientTime > 0) else 0.0
         
-        estimatedTimeToFinish = (sumAvgCrawlerTime / clientsTotal) * resourcesTotal if (clientsTotal > 0) else 0.0
+        estimatedTimeToFinish = (sumAvgCrawlerTime / (clientsTotal ** 2)) * (resourcesAvailable + resourcesInProgress) if (clientsTotal > 0) else 0.0
         estimatedMinSec = divmod(estimatedTimeToFinish, 60)
         estimatedHoursMin = divmod(estimatedMinSec[0], 60)
         

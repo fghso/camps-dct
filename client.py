@@ -7,6 +7,7 @@ import socket
 import json
 import argparse
 import common
+from copy import deepcopy
 
 
 # Analyse arguments
@@ -29,7 +30,7 @@ if (args.verbose is not None): config["client"]["verbose"] = args.verbose
 if (args.logging is not None): config["client"]["logging"] = args.logging
 
 # Get an instance of the crawler
-crawlerObject = crawler.Crawler()
+crawlerObject = crawler.Crawler(deepcopy(config["client"]))
 
 # Get client ID
 processID = os.getpid()

@@ -22,7 +22,7 @@ class StatusCodes():
 
 class BasePersistenceHandler():  
     status = StatusCodes()
-    def __init__(self, configurationsDictionary): pass # Receives a copy of everything in handler section of the XML configuration file as the parameter configurationsDictionary
+    def __init__(self, configurationsDictionary): pass # Receives a copy of everything in the handler section of the XML configuration file as the parameter configurationsDictionary
     def select(self): return (None, None, None) # Returns a tuple: (resource unique key, resource id, resource info dictionary)
     def update(self, resourceKey, status, resourceInfo): pass
     def insert(self, resourcesList): pass # Receives a list of tuples: [(resource id, resource info dictionary), ...]
