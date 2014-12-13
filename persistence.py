@@ -28,7 +28,7 @@ class BasePersistenceHandler():
     def insert(self, resourcesList): pass # Receives a list of tuples: [(resource id, resource info dictionary), ...]
     def count(self): return (0, 0, 0, 0, 0, 0) # Returns a tuple: (total, succeeded, inprogress, available, failed, error)
     def reset(self, status): return 0 # Returns the number of resources reseted
-    def close(self): pass # Called when a connection to a client is finished
+    def finish(self): pass # Called when a connection to a client is finished
     def shutdown(self): pass # Called when server is shut down, allowing to free shared resources
         
         
@@ -79,7 +79,9 @@ class MemoryPersistenceHandler(BasePersistenceHandler):
     def _save(self, list, pk, id, status, info, changeInfo = True):
         if (pk is not None):
             if (status is not None): list[pk]["status"] = status
-            if (changeInfo): list[pk]["info"].update(info)
+            if (changeInfo): 
+                if (list[pk]["info"] is not None) and (info is not None): list[pk]["info"].update(info)
+                else: list[pk]["info"] = info
         else: 
             list.append({"id": id, "status": status, "info": info})
     
@@ -237,6 +239,7 @@ class FilePersistenceHandler(MemoryPersistenceHandler):
         self._setFileHandlers()
         with self.loadLock:
             if (not self.resources):
+                self.echo.default("Loading resources from disk...")
                 file = open(self.selectConfig["filename"], "r")
                 resourcesList = self.selectHandler.load(file)
                 for resource in resourcesList:
@@ -249,6 +252,7 @@ class FilePersistenceHandler(MemoryPersistenceHandler):
                     if ("info" not in resource): resource["info"] = None
                     self.resources.append(resource)
                 file.close()
+                self.echo.default("Done.")
                 FilePersistenceHandler.selectColNames = self.selectHandler.selectColNames
                 self._setInsertColNames()
             
@@ -487,6 +491,6 @@ class MySQLPersistenceHandler(BasePersistenceHandler):
         cursor.close()
         return affectedRows
         
-    def close(self):
+    def finish(self):
         self.mysqlSelectConnection.close()
         

@@ -32,5 +32,5 @@ class BaseFilter():
     def callback(self, resourceID, resourceInfo, newResources, extraInfo):
         pass
         
-    def close(self): pass # Called when a connection to a client is finished
+    def finish(self): pass # Called when a connection to a client is finished
     def shutdown(self): pass # Called when server is shut down, allowing to free shared resources

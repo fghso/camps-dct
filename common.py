@@ -7,6 +7,7 @@ import inspect
 import datetime
 import xmltodict
 
+import time
     
 # ==================== Classes ====================
 class NetworkHandler():  
@@ -43,9 +44,8 @@ class NetworkHandler():
     def recv(self):
         strMsg = ""
         while (True):
-            packet = ""
             packet = self.sock.recv(self.bufsize)
-            if (not packet): return None
+            if (not packet): return packet
             header = json.loads(packet[:self.headersize])
             splitMsg = packet[self.headersize:]
             strMsg = "".join((strMsg, splitMsg))

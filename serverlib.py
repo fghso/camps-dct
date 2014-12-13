@@ -38,7 +38,7 @@ numCrawlingMeasures = {0: long(0)}
 
 # Define synchronization objects for critical regions of the code
 removeClientLock = threading.Lock()
-clientRemovedCondition = threading.Condition()
+clientFinishedCondition = threading.Condition()
 shutdownLock = threading.Lock()
 
 
@@ -156,13 +156,14 @@ class ServerHandler(SocketServer.BaseRequestHandler):
                         # If the client has been removed, finish it
                         else:
                             del clientsInfo[clientID]
-                            with clientRemovedCondition: clientRemovedCondition.notify_all()
                             if (self.server.state == "running"):
                                 client.send({"command": "FINISH", "reason": "removed"})
                                 echo.default("Client %d removed." % clientID)
                             else:
-                                if (self.server.state == "finishing"): client.send({"command": "FINISH", "reason": "task done"})
-                                if (self.server.state == "shuting down"): client.send({"command": "FINISH", "reason": "shut down"})
+                                if (self.server.state == "finishing"): 
+                                    client.send({"command": "FINISH", "reason": "task done"})
+                                elif (self.server.state == "shuting down"): 
+                                    client.send({"command": "FINISH", "reason": "shut down"})
                                 echo.default("Client %d finished." % clientID)
                             running = False
                     
@@ -240,8 +241,8 @@ class ServerHandler(SocketServer.BaseRequestHandler):
                         else: removeError.append(ID)
                     # Wait for alive threads to safely terminate
                     if (removeSuccess): 
-                        with clientRemovedCondition: 
-                            while any(ID in clientsInfo for ID in removeSuccess): clientRemovedCondition.wait()
+                        with clientFinishedCondition: 
+                            while any(ID in clientsInfo for ID in removeSuccess): clientFinishedCondition.wait()
                     # Send response to manager
                     client.send({"command": "RM_RET", "successlist": [str(ID) for ID in removeSuccess], "errorlist": [str(ID) for ID in removeError]})
                     running = False
@@ -265,9 +266,8 @@ class ServerHandler(SocketServer.BaseRequestHandler):
                             continue
                     echo.default("Finishing all clients to shut down...")
                     for ID in clientsInfo.keys(): self.removeClient(ID)
-                    with clientRemovedCondition:
-                        while (clientsInfo): clientRemovedCondition.wait()
-                    client.send({"command": "SD_RET", "fail": False})
+                    with clientFinishedCondition:
+                        while (clientsInfo): clientFinishedCondition.wait()
                     
                 endServerTime = timeit.default_timer()
                 serverAggregatedTimes[clientID] += (endServerTime - startServerTime)
@@ -287,9 +287,9 @@ class ServerHandler(SocketServer.BaseRequestHandler):
                 running = False
     
     def finish(self):
-        self.persist.close()
-        for filter in self.parallelFilters: filter.close()
-        for filter in self.sequentialFilters: filter.close()
+        self.persist.finish()
+        for filter in self.parallelFilters: filter.finish()
+        for filter in self.sequentialFilters: filter.finish()
         
         # If this is the last client finishing, free resources allocated by persistence and filters objects
         if (self.server.state != "running") and (threading.active_count() == 2):
@@ -297,7 +297,10 @@ class ServerHandler(SocketServer.BaseRequestHandler):
             self.persist.shutdown()
             for filter in self.parallelFilters: filter.shutdown()
             for filter in self.sequentialFilters: filter.shutdown()
-            self.server.shutdown() 
+            self.server.shutdown()
+            if (self.server.state == "shuting down"): self.client.send({"command": "SD_RET", "fail": False})
+            
+        with clientFinishedCondition: clientFinishedCondition.notify_all()
         
     def removeClient(self, ID):
         with removeClientLock:
