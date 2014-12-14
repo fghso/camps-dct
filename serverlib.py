@@ -175,7 +175,7 @@ class ServerHandler(SocketServer.BaseRequestHandler):
                     clientNewResources = message["newresources"]
                     self.callbackFilters(clientResourceID, clientResourceInfo, clientExtraInfo, clientNewResources)
                     if (config["global"]["feedback"]): persist.insert(clientNewResources)
-                    persist.update(clientResourceKey, status.SUCCEDED, clientResourceInfo)
+                    persist.update(clientResourceKey, status.SUCCEEDED, clientResourceInfo)
                     client.send({"command": "DONE_RET"})
                             
                 elif (command == "EXCEPTION"):
@@ -226,17 +226,18 @@ class ServerHandler(SocketServer.BaseRequestHandler):
                     running = False
                     
                 elif (command == "RM_CLIENTS"):
-                    clientIDList = []
-                    # Pick all disconnected clients to remove them
-                    if (message["clientidlist"][0] == "+"):
-                        for ID in clientsInfo.keys():
-                            if (not clientsThreads[ID][0].is_alive()): clientIDList.append(ID)
-                    # Get client IDs specified by the user 
-                    else: clientIDList = [int(ID) for ID in message["clientidlist"]]
+                    clientIDs = set(message["clientids"])
+                    clientNames = message["clientnames"]
+                    # Get IDs of clients specified by name or IDs corresponding to the keywords 'all' and 'disconnected'
+                    for (ID, info) in clientsInfo.items():
+                        if (("all" in clientNames) or
+                            (info[0][0] in clientNames) or 
+                            ((not clientsThreads[ID][0].is_alive()) and ("disconnected" in clientNames))): 
+                            clientIDs.add(ID)
                     # Do remove
                     removeSuccess = []
                     removeError = []
-                    for ID in clientIDList:
+                    for ID in clientIDs:
                         if (self.removeClient(ID)): removeSuccess.append(ID)
                         else: removeError.append(ID)
                     # Wait for alive threads to safely terminate
@@ -249,8 +250,8 @@ class ServerHandler(SocketServer.BaseRequestHandler):
                     
                 elif (command == "RESET"):
                     statusName = message["status"]
-                    if (statusName == "INPROGRESS") and (clientsInfo): 
-                        client.send({"command": "RESET_RET", "fail": True, "reason": "It is not possible to reset INPROGRESS resources while there are clients connected."})
+                    if ((statusName == "INPROGRESS") or (statusName == "SUCCEEDED")) and (clientsInfo): 
+                        client.send({"command": "RESET_RET", "fail": True, "reason": "It is not possible to reset %s resources while there are clients connected." % statusName})
                     else:
                         resetCount = persist.reset(getattr(status, statusName))
                         client.send({"command": "RESET_RET", "fail": False, "count": resetCount})
@@ -313,8 +314,7 @@ class ServerHandler(SocketServer.BaseRequestHandler):
                     del clientsInfo[ID]
                     self.server.echo.default("Client %d removed." % ID)
                 return True
-            else:
-                return False
+            return False
                 
     def threadedFilterApplyWrapper(self, filter, resourceID, resourceInfo, outputList):
         data = filter.apply(resourceID, deepcopy(resourceInfo), None)

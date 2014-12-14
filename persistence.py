@@ -13,7 +13,7 @@ from collections import OrderedDict
 
 
 class StatusCodes():
-    SUCCEDED   =  2
+    SUCCEEDED   =  2
     INPROGRESS =  1
     AVAILABLE  =  0 
     FAILED     = -1
@@ -37,10 +37,11 @@ class BasePersistenceHandler():
 class MemoryPersistenceHandler(BasePersistenceHandler):
     loadLock = threading.Lock()
     insertLock = threading.Lock()
+    duplicatedIDException = None
     resources = []
     insertedResources = []
     IDsHash = {}
-    statusRecords = {BasePersistenceHandler.status.SUCCEDED:   0,
+    statusRecords = {BasePersistenceHandler.status.SUCCEEDED:  [],
                      BasePersistenceHandler.status.INPROGRESS: [],
                      BasePersistenceHandler.status.AVAILABLE:  deque(), 
                      BasePersistenceHandler.status.FAILED:     [],
@@ -49,20 +50,24 @@ class MemoryPersistenceHandler(BasePersistenceHandler):
     def __init__(self, configurationsDictionary): 
         self._extractConfig(configurationsDictionary)
         with self.loadLock:
+            if (MemoryPersistenceHandler.duplicatedIDException is not None): 
+                raise MemoryPersistenceHandler.duplicatedIDException
             if (not self.resources):
                 # Some data for tests
                 self.resources.extend([
                     {"id": 1, "status": 0, "info": {"crawler_name": "c1", "response_code": 3}},
-                    {"id": 2, "status": 0, "info": {"crawler_name": "c2", "response_code": 3}},
+                    {"id": 3, "status": 0, "info": {"crawler_name": "c2", "response_code": 3}},
                     {"id": 3, "status": 0, "info": None},
                     {"id": 4, "status": 0, "info": None}
                 ])
                 for pk, resource in enumerate(self.resources):
-                    if (resource["status"] == self.status.SUCCEDED): self.statusRecords[resource["status"]] += 1
-                    else: self.statusRecords[resource["status"]].append(pk)
+                    self.statusRecords[resource["status"]].append(pk)
                     if (self.config["uniqueresourceid"]): 
-                        if (resource["id"] not in self.IDsHash): self.IDsHash[resource["id"]] = (self.resources, pk)
-                        else: raise KeyError("Duplicated ID found in resources list: %s." % resource["id"])
+                        if (resource["id"] not in self.IDsHash): 
+                            self.IDsHash[resource["id"]] = (self.resources, pk)
+                        else: 
+                            MemoryPersistenceHandler.duplicatedIDException = KeyError("Duplicated ID found in resources list: %s." % resource["id"])
+                            raise MemoryPersistenceHandler.duplicatedIDException
             
     def _extractConfig(self, configurationsDictionary):
         self.config = configurationsDictionary
@@ -97,8 +102,7 @@ class MemoryPersistenceHandler(BasePersistenceHandler):
         self.statusRecords[currentStatus].remove(resourceKey)
         if (resourceInfo): self._save(self.resources, resourceKey, None, status, resourceInfo)
         else: self._save(self.resources, resourceKey, None, status, resourceInfo, False)
-        if (status == self.status.SUCCEDED): self.statusRecords[status] += 1
-        else: self.statusRecords[status].append(resourceKey)
+        self.statusRecords[status].append(resourceKey)
         
     def insert(self, resourcesList): 
         insertList = []
@@ -118,7 +122,7 @@ class MemoryPersistenceHandler(BasePersistenceHandler):
         
     def count(self): 
         return (len(self.resources), 
-                self.statusRecords[self.status.SUCCEDED], 
+                len(self.statusRecords[self.status.SUCCEEDED]), 
                 len(self.statusRecords[self.status.INPROGRESS]), 
                 len(self.statusRecords[self.status.AVAILABLE]), 
                 len(self.statusRecords[self.status.FAILED]), 
@@ -238,21 +242,27 @@ class FilePersistenceHandler(MemoryPersistenceHandler):
         self.echo = common.EchoHandler()
         self._setFileHandlers()
         with self.loadLock:
+            if (MemoryPersistenceHandler.duplicatedIDException is not None): 
+                raise MemoryPersistenceHandler.duplicatedIDException
             if (not self.resources):
                 self.echo.default("Loading resources from disk...")
-                file = open(self.selectConfig["filename"], "r")
-                resourcesList = self.selectHandler.load(file)
-                for resource in resourcesList:
-                    if (resource["status"] == self.status.SUCCEDED): self.statusRecords[resource["status"]] += 1
-                    else: self.statusRecords[resource["status"]].append(len(self.resources))
-                    if (self.config["uniqueresourceid"]): 
-                        if (resource["id"] not in self.IDsHash): 
-                            self.IDsHash[resource["id"]] = (self.resources, len(self.resources))
-                        else: raise KeyError("Duplicated ID found in resources file: %s." % resource["id"])
-                    if ("info" not in resource): resource["info"] = None
-                    self.resources.append(resource)
-                file.close()
+                try: 
+                    file = open(self.selectConfig["filename"], "r")
+                    resourcesList = self.selectHandler.load(file)
+                    for resource in resourcesList:
+                        self.statusRecords[resource["status"]].append(len(self.resources))
+                        if (self.config["uniqueresourceid"]): 
+                            if (resource["id"] not in self.IDsHash): 
+                                self.IDsHash[resource["id"]] = (self.resources, len(self.resources))
+                            else: 
+                                MemoryPersistenceHandler.duplicatedIDException = KeyError("Duplicated ID found in resources list: %s." % resource["id"])
+                                raise MemoryPersistenceHandler.duplicatedIDException
+                        if ("info" not in resource): resource["info"] = None
+                        self.resources.append(resource)
+                except: raise
+                finally: file.close()
                 self.echo.default("Done.")
+                FilePersistenceHandler.lastSaveTime = datetime.now()
                 FilePersistenceHandler.selectColNames = self.selectHandler.selectColNames
                 self._setInsertColNames()
             
@@ -336,10 +346,6 @@ class FilePersistenceHandler(MemoryPersistenceHandler):
                 os.rename("dump.temp", self.insertConfig["filename"])
         self.echo.default("Done.")
                 
-    def select(self):
-        if (not FilePersistenceHandler.lastSaveTime): FilePersistenceHandler.lastSaveTime = datetime.now()
-        return MemoryPersistenceHandler.select(self)
-        
     def update(self, resourceKey, status, resourceInfo): 
         MemoryPersistenceHandler.update(self, resourceKey, status, resourceInfo)
         self._checkTimeDelta()
@@ -473,7 +479,7 @@ class MySQLPersistenceHandler(BasePersistenceHandler):
         
         counts = [0, 0, 0, 0, 0, 0]
         for row in result:
-            if (row[0] == self.status.SUCCEDED): counts[1] = row[1]
+            if (row[0] == self.status.SUCCEEDED): counts[1] = row[1]
             elif (row[0] == self.status.INPROGRESS): counts[2] = row[1]
             elif (row[0] == self.status.AVAILABLE): counts[3] = row[1]
             elif (row[0] == self.status.FAILED): counts[4] = row[1]

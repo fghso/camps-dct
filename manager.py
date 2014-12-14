@@ -13,8 +13,8 @@ parser = argparse.ArgumentParser(add_help=False, description="Send action comman
 parser.add_argument("configFilePath")
 parser.add_argument("-h", "--help", action="help", help="show this help message and exit")
 parser.add_argument("-s", "--status", choices=["raw", "basic", "extended"], help="show status information")
-parser.add_argument("-r", "--remove", metavar="clientID", nargs="+", help="remove clients from the server's list. Multiple client IDs can be given, separated by spaces. To remove all disconnected clients, write '+' as the ID")
-parser.add_argument("--reset", choices=["inprogress", "failed", "error"], help="make available the resources with the specified status")
+parser.add_argument("-r", "--remove", metavar="client ID or client hostname", nargs="+", help="remove clients from the server's list. Multiple client IDs or hostnames can be given, separated by spaces. It is also possible to enter an ID range in the form 'min:max', where min and max are IDs. To remove all disconnected clients, use the keyword 'disconnected'. To remove all clients at once, use the keyword 'all'")
+parser.add_argument("--reset", choices=["succeeded", "inprogress", "failed", "error"], help="make available the resources with the specified status")
 parser.add_argument("--shutdown", action="store_true", help="remove all clients from the server's list and shutdown server")
 args = parser.parse_args()
 
@@ -30,13 +30,24 @@ except:
 
 # Remove client
 if (args.remove):
-    server.send({"command": "RM_CLIENTS", "clientidlist": args.remove})
+    clientIDs = set()
+    clientNames = set()
+
+    for entry in args.remove:
+        if entry.isdigit(): 
+            clientIDs.add(int(entry))
+        else:
+            minMax = entry.split(":")
+            if (len(minMax) > 1): clientIDs.update(range(int(minMax[0]), int(minMax[1]) + 1))
+            else: clientNames.add(entry)
+            
+    server.send({"command": "RM_CLIENTS", "clientids": clientIDs, "clientnames": clientNames})
     message = server.recv()
     server.close()
     
     removeSuccess = message["successlist"]
     removeError = message["errorlist"]
-    if (not removeSuccess) and (not removeError): print "No disconnected client found to remove."
+    if (not removeSuccess) and (not removeError): print "No client in the list found to remove."
     if (len(removeSuccess) > 1): 
         print "Clients %s successfully removed." % " and ".join((", ".join(removeSuccess[:-1]), removeSuccess[-1]))
     elif (removeSuccess): 

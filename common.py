@@ -7,7 +7,6 @@ import inspect
 import datetime
 import xmltodict
 
-import time
     
 # ==================== Classes ====================
 class NetworkHandler():  
@@ -15,9 +14,13 @@ class NetworkHandler():
         if (socketObject): self.sock = socketObject
         else: self.sock = socket.socket()
         self.bufsize = 8192
-        self.headersize = 15
-        self.msgsize = self.bufsize - self.headersize - 1
-        self.dateHandler = lambda obj: obj.isoformat() if isinstance(obj, datetime.datetime) else None
+        self.headersize = 11
+        self.msgsize = self.bufsize - self.headersize
+    
+    def _defaultSerializer(self, obj):
+        if isinstance(obj, datetime.datetime): return obj.isoformat()
+        elif isinstance(obj, set): return tuple(obj)
+        raise TypeError("%s is not JSON serializable" % obj)
         
     def connect(self, address, port):
         self.sock.connect((address, port))
@@ -27,18 +30,18 @@ class NetworkHandler():
         return (socket.gethostbyaddr(self.sock.getpeername()[0])[0].split(".")[0],) + self.sock.getpeername()
         
     def send(self, message):
-        strMsg = json.dumps(message, default = self.dateHandler)
+        strMsg = json.dumps(message, default = self._defaultSerializer)
         splitMsg = [strMsg[i:i+self.msgsize] for i in range(0, len(strMsg), self.msgsize)]
         
         # Send intermediary packets
-        header = json.dumps({"last": False})
+        header = json.dumps({"last": 0})
         for i in range(len(splitMsg) - 1):
-            packet = " ".join((header, splitMsg[i]))
+            packet = "".join((header, splitMsg[i]))
             self.sock.sendall(packet)
         
         # Send final packet
-        header = json.dumps({"last": True})
-        packet = " ".join((header, splitMsg[-1]))
+        header = json.dumps({"last": 1})
+        packet = "".join((header, splitMsg[-1]))
         self.sock.sendall(packet)
         
     def recv(self):
