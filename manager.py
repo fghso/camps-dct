@@ -5,7 +5,6 @@ import sys
 import json
 import argparse
 import common
-from datetime import datetime
 
 
 # Analyse arguments
@@ -103,17 +102,16 @@ else:
     
     clientsStatusList = message["clients"]
     serverStatus = message["server"]
-    serverStatus["time"]["start"] = datetime.utcfromtimestamp(serverStatus["time"]["start"])
-    dateTimeNow = datetime.now()
     
     # Raw status
     if (args.status == "raw"):
         status = "\n" + (" Status ").center(50, ':') + "\n\n"
         status += "  Server:\n"
-        status += str("    [address, port, pid, state, start, total, succeeded, inprogress, available, failed, error]\n    ")
+        status += str("    [address, port, pid, state, start, current, total, succeeded, inprogress, available, failed, error]\n    ")
         status += str([serverAddress[1], serverAddress[2], serverStatus["pid"], 
                         serverStatus["state"],
                         serverStatus["time"]["start"].strftime("%d/%m/%Y %H:%M:%S"),
+                        serverStatus["time"]["current"].strftime("%d/%m/%Y %H:%M:%S"),
                         serverStatus["counts"]["total"], serverStatus["counts"]["succeeded"], 
                         serverStatus["counts"]["inprogress"], serverStatus["counts"]["available"], 
                         serverStatus["counts"]["failed"], serverStatus["counts"]["error"]])
@@ -124,8 +122,6 @@ else:
             status += "    No client connected right now.\n"
         for clientStatus in clientsStatusList:
             clientStatus["threadstate"] = " " if (clientStatus["threadstate"] == 0) else ("-" if (clientStatus["threadstate"] == -1) else "+")
-            clientStatus["time"]["start"] = datetime.utcfromtimestamp(clientStatus["time"]["start"])
-            clientStatus["time"]["lastrequest"] = datetime.utcfromtimestamp(clientStatus["time"]["lastrequest"])
             status += str([clientStatus["clientid"], clientStatus["threadstate"], str(clientStatus["address"][0]), 
                         str(clientStatus["address"][1]), clientStatus["address"][2], clientStatus["pid"],
                         clientStatus["time"]["start"].strftime("%d/%m/%Y %H:%M:%S"), 
@@ -145,9 +141,7 @@ else:
             for clientStatus in clientsStatusList:
                 clientStatus["clientid"] = "#%d" % clientStatus["clientid"]
                 clientStatus["threadstate"] = " " if (clientStatus["threadstate"] == 0) else ("-" if (clientStatus["threadstate"] == -1) else "+")
-                clientStatus["time"]["start"] = datetime.utcfromtimestamp(clientStatus["time"]["start"])
-                clientStatus["time"]["lastrequest"] = datetime.utcfromtimestamp(clientStatus["time"]["lastrequest"])
-                elapsedTime = dateTimeNow - clientStatus["time"]["start"]
+                elapsedTime = serverStatus["time"]["current"] - clientStatus["time"]["start"]
                 elapsedMinSec = divmod(elapsedTime.seconds, 60)
                 elapsedHoursMin = divmod(elapsedMinSec[0], 60)
                 status += "  %3s %s %s (%s:%s/%s): %s since %s [%d processed in %s]\n" % (
@@ -166,7 +160,7 @@ else:
         else:
             status += "  No client connected right now.\n"
 
-        elapsedTime = dateTimeNow - serverStatus["time"]["start"]
+        elapsedTime = serverStatus["time"]["current"] - serverStatus["time"]["start"]
         elapsedMinSec = divmod(elapsedTime.seconds, 60)
         elapsedHoursMin = divmod(elapsedMinSec[0], 60)
         
@@ -192,7 +186,7 @@ else:
         resourcesErrorPercent = ((resourcesError / resourcesTotal) * 100) if (resourcesTotal > 0) else 0.0
         resourcesProcessedPercent = ((resourcesProcessed / resourcesTotal) * 100) if (resourcesTotal > 0) else 0.0
         
-        sumClientElapsedTime = sum([(dateTimeNow - clientStatus["time"]["start"]).seconds for clientStatus in clientsStatusList])
+        sumClientElapsedTime = sum([(serverStatus["time"]["current"] - clientStatus["time"]["start"]).seconds for clientStatus in clientsStatusList])
         sumAgrServerTime = sum([clientStatus["time"]["agrserver"] for clientStatus in clientsStatusList])
         fractionServerTime = sumAgrServerTime / sumClientElapsedTime if (sumClientElapsedTime > 0) else 0.0
         proportionalServerTime = fractionServerTime * elapsedTime.seconds
@@ -275,7 +269,6 @@ else:
             for clientStatus in clientsStatusList:
                 clientStatus["clientid"] = "#%d" % clientStatus["clientid"]
                 clientStatus["threadstate"] = " " if (clientStatus["threadstate"] == 0) else ("-" if (clientStatus["threadstate"] == -1) else "+")
-                clientStatus["time"]["lastrequest"] = datetime.utcfromtimestamp(clientStatus["time"]["lastrequest"])
                 status += "  %3s %s %s: %s since %s\n" % (
                             clientStatus["clientid"], 
                             clientStatus["threadstate"], 

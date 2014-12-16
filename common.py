@@ -4,8 +4,9 @@ import socket
 import json
 import logging
 import inspect
-import datetime
+import calendar
 import xmltodict
+from datetime import datetime
 
     
 # ==================== Classes ====================
@@ -17,9 +18,14 @@ class NetworkHandler():
         self.headersize = 10
     
     def _defaultSerializer(self, obj):
-        if isinstance(obj, datetime.datetime): return obj.isoformat()
+        #if isinstance(obj, datetime): return obj.isoformat()
+        if isinstance(obj, datetime): return {"__datetime__": calendar.timegm(obj.utctimetuple())}
         elif isinstance(obj, set): return tuple(obj)
         raise TypeError("%s is not JSON serializable" % obj)
+        
+    def _defaultDeserializer(self, dictionary):
+        if ("__datetime__" in dictionary): return datetime.utcfromtimestamp(dictionary["__datetime__"])
+        return dictionary
         
     def connect(self, address, port):
         self.sock.connect((address, port))
@@ -48,7 +54,7 @@ class NetworkHandler():
             more = self.sock.recv(self.bufsize)
             if (not more): return more
             strMsg += more
-        return json.loads(strMsg)
+        return json.loads(strMsg, object_hook = self._defaultDeserializer)
     
     def close(self):
         self.sock.shutdown(socket.SHUT_RDWR)

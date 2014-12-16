@@ -8,7 +8,6 @@ import threading
 import json
 import time
 import timeit
-import calendar
 import common
 import persistence
 import filters
@@ -210,8 +209,8 @@ class ServerHandler(SocketServer.BaseRequestHandler):
                         clientStatus["pid"] = info[1]
                         clientStatus["resourceid"] = info[3]
                         clientStatus["amount"] = info[4]
-                        clientStatus["time"] = {"start": calendar.timegm(info[5].utctimetuple())}
-                        clientStatus["time"]["lastrequest"] = calendar.timegm(info[6].utctimetuple())
+                        clientStatus["time"] = {"start": info[5]}
+                        clientStatus["time"]["lastrequest"] = info[6]
                         clientStatus["time"]["agrserver"] = serverAggregatedTimes[ID]
                         clientStatus["time"]["agrclient"] = clientAggregatedTimes[ID]
                         clientStatus["time"]["agrcrawler"] = crawlerAggregatedTimes[ID]
@@ -222,7 +221,6 @@ class ServerHandler(SocketServer.BaseRequestHandler):
                     # Server status
                     serverStatus = {"pid": os.getpid()}
                     serverStatus["state"] = self.server.state
-                    serverStatus["time"] = {"start": calendar.timegm(self.server.startTime.utctimetuple())}
                     counts = persist.count()
                     serverStatus["counts"] = {"total": counts[0]}
                     serverStatus["counts"]["succeeded"] = counts[1]
@@ -230,6 +228,8 @@ class ServerHandler(SocketServer.BaseRequestHandler):
                     serverStatus["counts"]["available"] = counts[3]
                     serverStatus["counts"]["failed"] = counts[4]
                     serverStatus["counts"]["error"] = counts[5]
+                    serverStatus["time"] = {"start": self.server.startTime}
+                    serverStatus["time"]["current"] = datetime.now()
                     # Send status 
                     client.send({"command": "GIVE_STATUS", "clients": clientsStatusList, "server": serverStatus})
                     running = False
