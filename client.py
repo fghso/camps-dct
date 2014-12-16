@@ -32,13 +32,13 @@ if (args.logging is not None): config["client"]["logging"] = args.logging
 # Get an instance of the crawler
 crawlerObject = crawler.Crawler(deepcopy(config["client"]))
 
-# Get client ID
+# Connect to server
 processID = os.getpid()
 server = common.NetworkHandler()
 server.connect(config["global"]["connection"]["address"], config["global"]["connection"]["port"])
-server.send({"command": "GET_LOGIN", "processid": processID})
+server.send({"command": "CONNECT", "type": "client", "processid": processID})
 message = server.recv()
-if (message["fail"]): sys.exit("ERROR: %s" % message["reason"])
+if (message["command"] == "REFUSED"): sys.exit("ERROR: %s" % message["reason"])
 else: clientID = message["clientid"]
 
 # Configure echoing

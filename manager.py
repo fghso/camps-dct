@@ -27,6 +27,10 @@ try:
     server.connect(config["global"]["connection"]["address"], config["global"]["connection"]["port"])
 except:
     sys.exit("ERROR: It was not possible to connect to server at %s:%s." % (config["global"]["connection"]["address"], config["global"]["connection"]["port"]))
+    
+server.send({"command": "CONNECT", "type": "manager"})
+message = server.recv()
+if (message["command"] == "REFUSED"): sys.exit("ERROR: %s" % message["reason"])
 
 # Remove client
 if (args.remove):
@@ -73,10 +77,22 @@ elif (args.reset):
 elif (args.shutdown):   
     server.send({"command": "SHUTDOWN"})
     message = server.recv()
-    server.close()
     
-    if (message["fail"]): print "ERROR: %s" % message["reason"]
-    else: print "Server successfully shut down."
+    if (message["state"] == "failed"): sys.exit("ERROR: %s" % message["reason"])
+    
+    print "Finishing all clients to shut down..."    
+    total = message["remaining"]
+    while (message["state"] == "sdclients"):
+        print "%d done, %d remaining.%s\r" % (total - message["remaining"], message["remaining"], " " * 10),
+        message = server.recv()
+    print "%d done, 0 remaining.%s\r" % (total, " " * 10)
+    
+    print "Shuting down filters..."
+    message = server.recv()
+    print "Shuting down persistence handler..."
+    message = server.recv()
+    print "Server successfully shut down."
+    server.close()
         
 # Show status
 else:
@@ -195,6 +211,7 @@ else:
         proportionalCrawlerMinSec = divmod(proportionalCrawlerTime, 60)
         proportionalCrawlerHoursMin = divmod(proportionalCrawlerMinSec[0], 60)
         proportionalCrawlerTimePercent = fractionCrawlerTime * 100
+        proportionalTotalTime = proportionalServerTime + proportionalClientTime
         performanceIndicator = "good"
         if (proportionalServerTimePercent >= 25): performanceIndicator = "moderate"
         if (proportionalServerTimePercent >= 50): performanceIndicator = "bad"
@@ -212,7 +229,7 @@ else:
         
         numResourcesProcessed = float(sum([clientStatus["amount"] for clientStatus in clientsStatusList]))
         avgResourcesPerclient = numResourcesProcessed / clientsTotal if (clientsTotal > 0) else 0.0
-        avgResourcesPerSec = numResourcesProcessed / sumAgrClientTime if (sumAgrClientTime > 0) else 0.0
+        avgResourcesPerSec = numResourcesProcessed / proportionalTotalTime if (proportionalTotalTime > 0) else 0.0
         
         estimatedTimeToFinish = (sumAvgCrawlerTime / (clientsTotal ** 2)) * (resourcesAvailable + resourcesInProgress) if (clientsTotal > 0) else 0.0
         estimatedMinSec = divmod(estimatedTimeToFinish, 60)

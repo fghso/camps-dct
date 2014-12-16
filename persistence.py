@@ -246,8 +246,8 @@ class FilePersistenceHandler(MemoryPersistenceHandler):
                 raise MemoryPersistenceHandler.duplicatedIDException
             if (not self.resources):
                 self.echo.default("Loading resources from disk...")
-                try: 
-                    file = open(self.selectConfig["filename"], "r")
+                file = open(self.selectConfig["filename"], "r")
+                try:
                     resourcesList = self.selectHandler.load(file)
                     for resource in resourcesList:
                         self.statusRecords[resource["status"]].append(len(self.resources))
