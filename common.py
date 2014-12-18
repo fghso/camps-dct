@@ -51,7 +51,7 @@ class NetworkHandler():
         # Get message
         strMsg = ""
         while len(strMsg) < msgSize:
-            more = self.sock.recv(self.bufsize)
+            more = self.sock.recv(min(msgSize - len(strMsg), self.bufsize))
             if (not more): return more
             strMsg += more
         return json.loads(strMsg, object_hook = self._defaultDeserializer)
