@@ -11,10 +11,10 @@ import common
 parser = argparse.ArgumentParser(add_help=False, description="Send action commands to be performed by the server or retrieve status information. If none of the optional arguments are given, show basic status information.")
 parser.add_argument("configFilePath")
 parser.add_argument("-h", "--help", action="help", help="show this help message and exit")
-parser.add_argument("-s", "--status", choices=["raw", "basic", "extended"], help="show status information")
 parser.add_argument("-r", "--remove", metavar="client ID or client hostname", nargs="+", help="remove clients from the server's list. Multiple client IDs or hostnames can be given, separated by spaces. It is also possible to enter an ID range in the form 'min:max', where min and max are IDs. To remove all disconnected clients, use the keyword 'disconnected'. To remove all clients at once, use the keyword 'all'")
 parser.add_argument("--reset", choices=["succeeded", "inprogress", "failed", "error"], help="make available the resources with the specified status")
 parser.add_argument("--shutdown", action="store_true", help="remove all clients from the server's list and shutdown server")
+parser.add_argument("-s", "--status", choices=["raw", "basic", "extended"], help="show status information")
 args = parser.parse_args()
 
 # Load configurations
@@ -76,23 +76,11 @@ elif (args.reset):
 elif (args.shutdown):   
     server.send({"command": "SHUTDOWN"})
     message = server.recv()
-    
-    if (message["state"] == "failed"): sys.exit("ERROR: %s" % message["reason"])
-    
-    print "Finishing all clients to shut down..."    
-    total = message["remaining"]
-    while (message["state"] == "sdclients"):
-        print "%d done, %d remaining.%s\r" % (total - message["remaining"], message["remaining"], " " * 10),
-        message = server.recv()
-    print "%d done, 0 remaining.%s\r" % (total, " " * 10)
-    
-    print "Shuting down filters..."
-    message = server.recv()
-    print "Shuting down persistence handler..."
-    message = server.recv()
-    print "Server successfully shut down."
     server.close()
-        
+    
+    if (message["fail"]): print "ERROR: %s" % message["reason"]
+    else: print "Server successfully shut down."
+            
 # Show status
 else:
     server.send({"command": "GET_STATUS"})
