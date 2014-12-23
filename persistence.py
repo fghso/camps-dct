@@ -4,6 +4,7 @@ import os
 import threading
 import json
 import csv
+import shutil
 import common
 import mysql.connector
 from datetime import datetime
@@ -312,9 +313,11 @@ class FilePersistenceHandler(MemoryPersistenceHandler):
             
     def _setInsertColNames(self):
         if (self.config["separateinsertlist"]): 
-            if (os.path.exists(self.insertConfig["filename"])):
+            try:
                 with open(self.insertConfig["filename"], "r") as file: 
                     FilePersistenceHandler.insertColNames = self.insertHandler.getFileColNames(file)
+            except IOError: 
+                with open(self.insertConfig["filename"], "w"): pass
         if (not FilePersistenceHandler.insertColNames): 
             FilePersistenceHandler.insertColNames = FilePersistenceHandler.selectColNames
             
@@ -338,8 +341,10 @@ class FilePersistenceHandler(MemoryPersistenceHandler):
             os.rename("dump.temp", self.selectConfig["filename"])
         if (self.insertedResources): 
             self.echo.default("Saving list of inserted resources to disk...")
-            with open("dump.temp", "w") as tempFile: 
-                self.insertHandler.dump(self.insertedResources, self.insertColNames, tempFile)
+            with open(self.insertConfig["filename"], "r") as originalFile:
+                with open("dump.temp", "w") as tempFile: 
+                    shutil.copyfileobj(originalFile, tempFile, 10485760)
+                    self.insertHandler.dump(self.insertedResources, self.insertColNames, tempFile)
             try: os.rename("dump.temp", self.insertConfig["filename"])
             except WindowsError: 
                 os.remove(self.insertConfig["filename"])
