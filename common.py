@@ -1,5 +1,6 @@
 # -*- coding: iso-8859-1 -*-
 
+import sys
 import socket
 import json
 import logging
@@ -93,6 +94,12 @@ class EchoHandler():
         
         
 # ==================== Methods ====================
+if sys.platform == "win32":
+    import win32api, win32con
+    def replace(src, dst):
+        win32api.MoveFileEx(src, dst, win32con.MOVEFILE_REPLACE_EXISTING)
+else: replace = os.rename
+
 def str2bool(stringToConvert):
     if stringToConvert.lower() in ("true", "t", "yes", "y", "on", "1"): return True
     if stringToConvert.lower() in ("false", "f", "no", "n", "off", "0"): return False
@@ -116,19 +123,18 @@ def loadConfig(configFilePath):
     if ("loopforever" not in config["server"]): config["server"]["loopforever"] = False
     else: config["server"]["loopforever"] = str2bool(config["server"]["loopforever"])
     
-    if ("filter" not in config["server"]): config["server"]["filter"] = []
-    elif (not isinstance(config["server"]["filter"], list)): config["server"]["filter"] = [config["server"]["filter"]]
+    if (isinstance(config["server"]["persistence"]["handler"], list)): 
+        config["server"]["persistence"]["handler"] = config["server"]["persistence"]["handler"][0]
     
-    for filter in config["server"]["filter"]:
+    if ("filtering" not in config["server"]): config["server"]["filtering"] = {"filter": []}
+    if (not isinstance(config["server"]["filtering"]["filter"], list)): config["server"]["filtering"]["filter"] = [config["server"]["filtering"]["filter"]]
+    
+    for filter in config["server"]["filtering"]["filter"]:
         if ("parallel" not in filter): filter["parallel"] = False
         else: filter["parallel"] = str2bool(filter["parallel"]) 
             
     # Client default values
     if ("client" not in config): config["client"] = {}
-    
-    # Persistence
-    if (isinstance(config["persistence"]["handler"], list)): 
-        config["persistence"]["handler"] = config["persistence"]["handler"][0]
     
     return config
     

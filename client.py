@@ -30,7 +30,7 @@ if (args.verbose is not None): config["client"]["verbose"] = args.verbose
 if (args.logging is not None): config["client"]["logging"] = args.logging
 
 # Get an instance of the crawler
-crawlerObject = crawler.Crawler(deepcopy(config["client"]))
+collector = crawler.Crawler(deepcopy(config["client"]))
 
 # Connect to server
 processID = os.getpid()
@@ -64,7 +64,7 @@ while (True):
             
             # Try to crawl the resource
             try: 
-                crawlerResponse = crawlerObject.crawl(resourceID, filters)
+                crawlerResponse = collector.crawl(resourceID, filters)
             # If a SystemExit exception has been raised, abort execution
             except SystemExit: 
                 echo.exception("SystemExit exception while crawling resource %s. Execution aborted." % resourceID)

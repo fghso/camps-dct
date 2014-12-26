@@ -54,7 +54,6 @@ class ServerHandler(SocketServer.BaseRequestHandler):
         
         # Define some class variables
         self.clientID = 0
-        self.persist = None
         self.cleanUpThread = False
     
         # Get network handler instance
@@ -68,18 +67,10 @@ class ServerHandler(SocketServer.BaseRequestHandler):
                     self.client.send({"command": "REFUSED", "reason": "Connection not allowed due to critical operations being performed to %s server." % ("shut down" if (self.server.state == "shutting down") else "finish")})
                     return
                 connections += 1
-        
-            # Get persistence handler instance
-            persistenceHandlerOptions = deepcopy(self.server.config["persistence"]["handler"])
-            self.persist = self.server.PersistenceHandlerClass(persistenceHandlerOptions)
-            
-            # Get filters instances
-            self.parallelFilters = []
-            self.sequentialFilters = []
-            for i, FilterClass in enumerate(self.server.FiltersClasses):
-                filterOptions = deepcopy(self.server.config["server"]["filter"][i])
-                if (filterOptions["parallel"]): self.parallelFilters.append(FilterClass(filterOptions))
-                else: self.sequentialFilters.append(FilterClass(filterOptions))
+                
+            self.server.persist.setup()
+            for filter in self.server.parallelFilters: filter.setup()
+            for filter in self.server.sequentialFilters: filter.setup()
             
             if (message["type"] == "client"):
                 # Set client ID and other informations
@@ -105,10 +96,10 @@ class ServerHandler(SocketServer.BaseRequestHandler):
         # Define some local variables
         config = self.server.config
         echo = self.server.echo
+        persist = self.server.persist
+        status = persistence.StatusCodes()
         client = self.client
         clientID = self.clientID
-        persist = self.persist
-        status = persistence.StatusCodes()
         
         # Set timing variables initial values
         serverAggregatedTimes[clientID] = 0.0
@@ -310,20 +301,14 @@ class ServerHandler(SocketServer.BaseRequestHandler):
         if (self.connectionAccepted):
             global connections
         
-            for filter in self.parallelFilters: filter.finish()
-            for filter in self.sequentialFilters: filter.finish()
-            self.persist.finish()
+            for filter in self.server.parallelFilters: filter.finish()
+            for filter in self.server.sequentialFilters: filter.finish()
+            self.server.persist.finish()
             
-            # Free resources allocated by persistence and filter objects after all clients and managers have finished
             if (self.cleanUpThread):
                 with finishedCondition:
                     while (connections > 1): finishedCondition.wait()
                     cleanUpEvent.set()
-                self.server.echo.default("Shutting down filters...")
-                for filter in self.parallelFilters: filter.shutdown()
-                for filter in self.sequentialFilters: filter.shutdown()
-                self.server.echo.default("Shutting down persistence handler...")
-                self.persist.shutdown()
                 self.server.shutdown()
                 if (self.clientID == 0): self.client.send({"command": "SD_RET", "fail": False})
                 
@@ -345,14 +330,14 @@ class ServerHandler(SocketServer.BaseRequestHandler):
                 
     def threadedFilterApplyWrapper(self, filter, resourceID, resourceInfo, outputList):
         data = filter.apply(resourceID, deepcopy(resourceInfo), None)
-        outputList.append({"filter": filter.name(), "order": None, "data": data})
+        outputList.append({"filter": filter.name, "order": None, "data": data})
         
     def threadedFilterCallbackWrapper(self, filter, resourceID, resourceInfo, newResources, extraInfo):
         filter.callback(resourceID, deepcopy(resourceInfo), deepcopy(newResources), deepcopy(extraInfo))
                 
     def applyFilters(self, resourceID, resourceInfo):
-        parallelFilters = self.parallelFilters
-        sequentialFilters = self.sequentialFilters
+        parallelFilters = self.server.parallelFilters
+        sequentialFilters = self.server.sequentialFilters
         filtersData = []
     
         # Start threaded filters
@@ -366,7 +351,7 @@ class ServerHandler(SocketServer.BaseRequestHandler):
         extraInfo = {}
         for filter in sequentialFilters:
             data = filter.apply(resourceID, deepcopy(resourceInfo), extraInfo)
-            filtersData.append({"name": filter.name(), "order": sequentialFilters.index(filter), "data": data})
+            filtersData.append({"name": filter.name, "order": sequentialFilters.index(filter), "data": data})
             
         # Wait for threaded filters to finish
         for filter in filterThreads:
@@ -375,8 +360,8 @@ class ServerHandler(SocketServer.BaseRequestHandler):
         return (filtersData if (filtersData) else None)
         
     def callbackFilters(self, resourceID, resourceInfo, extraInfo, newResources):
-        parallelFilters = self.parallelFilters
-        sequentialFilters = self.sequentialFilters
+        parallelFilters = self.server.parallelFilters
+        sequentialFilters = self.server.sequentialFilters
     
         # Start threaded filters
         filterThreads = []
@@ -403,10 +388,21 @@ class ThreadedTCPServer(SocketServer.ThreadingMixIn, SocketServer.TCPServer):
         # Configure echoing
         self.echo = common.EchoHandler(self.config["server"], "server[%s%s].log" % (socket.gethostname(), self.config["global"]["connection"]["port"]))
         
-        # Get persistence handler and filters classes
-        self.PersistenceHandlerClass = getattr(persistence, self.config["persistence"]["handler"]["class"])
-        self.FiltersClasses = [getattr(filters, filter["class"]) for filter in self.config["server"]["filter"]]
-                                
+        # Get persistence handler instance
+        self.echo.default("Initializing persistence handler...")
+        PersistenceHandlerClass = getattr(persistence, self.config["server"]["persistence"]["handler"]["class"])
+        self.persist = PersistenceHandlerClass(self.config["server"]["persistence"]["handler"])
+        
+        # Get filters instances
+        self.echo.default("Initializing filters...")
+        self.parallelFilters = []
+        self.sequentialFilters = []
+        self.FiltersClasses = [getattr(filters, filter["class"]) for filter in self.config["server"]["filtering"]["filter"]]
+        for i, FilterClass in enumerate(self.FiltersClasses):
+            filterOptions = self.config["server"]["filtering"]["filter"][i]
+            if (filterOptions["parallel"]): self.parallelFilters.append(FilterClass(filterOptions))
+            else: self.sequentialFilters.append(FilterClass(filterOptions))
+        
         # Call SocketSever constructor
         SocketServer.TCPServer.__init__(self, (self.config["global"]["connection"]["address"], self.config["global"]["connection"]["port"]), ServerHandler)
     
@@ -419,4 +415,14 @@ class ThreadedTCPServer(SocketServer.ThreadingMixIn, SocketServer.TCPServer):
         
         if (self.state == "finishing"): self.echo.default("Server finished." )
         else: self.echo.default("Server manually shut down.")
+        
+    def shutdown(self):
+        self.echo.default("Shutting down filters...")
+        for filter in self.parallelFilters: filter.shutdown()
+        for filter in self.sequentialFilters: filter.shutdown()
+        
+        self.echo.default("Shutting down persistence handler...")
+        self.persist.shutdown()
             
+        SocketServer.TCPServer.shutdown(self)
+        

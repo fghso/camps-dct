@@ -23,7 +23,6 @@ class Crawler:
         echo = common.EchoHandler(self.config)
 
         echo.default("Resource received: %s" % resourceID)
-        echo.default("Filters: %s" % filters)
         
         sleepTime = 30
         echo.default("Sleeping for %d seconds..." % sleepTime)
@@ -31,8 +30,9 @@ class Crawler:
         echo.default("Awaked!\n")
         
         newResources = []
-        newResources.append((resourceID + 1, {"crawler_name": socket.gethostname(), "response_code": 3}))
-        newResources.append((resourceID + 2, {"crawler_name": socket.gethostname(), "response_code": 3}))
+        newResources.append((resourceID + 1, {"crawler_name": "c1", "response_code": 3}))
+        newResources.append((resourceID + 2, {"crawler_name": "c2", "response_code": 4}))
+        extraInfo = {"savecsv": newResources[:1], "savejson": newResources[1:]}
         
-        return ({"crawler_name": socket.gethostname(), "response_code": 4}, None, newResources)
+        return ({"crawler_name": socket.gethostname(), "response_code": 4}, extraInfo, newResources)
             
