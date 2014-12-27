@@ -45,7 +45,7 @@ else: clientID = message["clientid"]
 echo = common.EchoHandler(config["client"], "client%s[%s%s].log" % (clientID, socket.gethostname(), config["global"]["connection"]["port"]))
 
 # Execute collection
-echo.default("Connected to server with ID %s " % clientID)
+echo.out("Connected to server with ID %s " % clientID)
 server.send({"command": "GET_ID"})
 while (True):
     try:
@@ -53,7 +53,7 @@ while (True):
         
         # Stop client execution if the connection has been interrupted
         if (not message): 
-            echo.default("Connection to server has been abruptly closed.", "ERROR")
+            echo.out("Connection to server has been abruptly closed.", "ERROR")
             break
         
         command = message["command"]
@@ -67,12 +67,12 @@ while (True):
                 crawlerResponse = collector.crawl(resourceID, filters)
             # If a SystemExit exception has been raised, abort execution
             except SystemExit: 
-                echo.exception("SystemExit exception while crawling resource %s. Execution aborted." % resourceID)
+                echo.out("SystemExit exception while crawling resource %s. Execution aborted." % resourceID, "EXCEPTION")
                 server.send({"command": "EXCEPTION", "type": "error"})
                 break
             # If another type of exception has been raised, report fail
             except: 
-                echo.exception("Exception while crawling resource %s." % resourceID)
+                echo.out("Exception while crawling resource %s." % resourceID, "EXCEPTION")
                 server.send({"command": "EXCEPTION", "type": "fail"})
             # If everything is ok, tell server that the collection of the resource has been finished. 
             # If feedback is enabled, also send the new resources to server
@@ -88,18 +88,13 @@ while (True):
             
         elif (command == "FINISH"):
             reason = message["reason"]
-            if (reason == "task done"): echo.default("Task done, client finished.")
-            elif (reason == "shut down"): echo.default("Server shuting down, client finished.")
-            else: echo.default("Client manually removed.")
+            if (reason == "task done"): echo.out("Task done, client finished.")
+            elif (reason == "shut down"): echo.out("Server shuting down, client finished.")
+            else: echo.out("Client manually removed.")
             break
             
-    except Exception as error:
-        echo.exception("Exception while processing data. Execution aborted.")
-        # if (config["client"]["verbose"]):
-            # print "ERROR: %s" % str(error)
-            # excType, excObj, excTb = sys.exc_info()
-            # fileName = os.path.split(excTb.tb_frame.f_code.co_filename)[1]
-            # print (excType, fileName, excTb.tb_lineno)
+    except:
+        echo.out("Exception while processing data. Execution aborted.", "EXCEPTION")
         break
 
 server.close()

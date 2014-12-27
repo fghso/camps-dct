@@ -13,7 +13,7 @@ parser.add_argument("configFilePath")
 parser.add_argument("-h", "--help", action="help", help="show this help message and exit")
 parser.add_argument("-r", "--remove", metavar="client ID or client hostname", nargs="+", help="remove clients from the server's list. Multiple client IDs or hostnames can be given, separated by spaces. It is also possible to enter an ID range in the form 'min:max', where min and max are IDs. To remove all disconnected clients, use the keyword 'disconnected'. To remove all clients at once, use the keyword 'all'")
 parser.add_argument("--reset", choices=["succeeded", "inprogress", "failed", "error"], help="make available the resources with the specified status")
-parser.add_argument("--shutdown", action="store_true", help="remove all clients from the server's list and shutdown server")
+parser.add_argument("--shutdown", action="store_true", help="remove all clients from the server's list and shut down server")
 parser.add_argument("-s", "--status", choices=["raw", "basic", "extended"], help="show status information")
 args = parser.parse_args()
 
@@ -174,21 +174,25 @@ else:
         resourcesErrorPercent = ((resourcesError / resourcesTotal) * 100) if (resourcesTotal > 0) else 0.0
         resourcesProcessedPercent = ((resourcesProcessed / resourcesTotal) * 100) if (resourcesTotal > 0) else 0.0
         
-        sumClientElapsedTime = sum([(serverStatus["time"]["current"] - clientStatus["time"]["start"]).seconds for clientStatus in clientsStatusList])
+        #sumClientElapsedTime = sum([(serverStatus["time"]["current"] - clientStatus["time"]["start"]).seconds for clientStatus in clientsStatusList])
         sumAgrServerTime = sum([clientStatus["time"]["agrserver"] for clientStatus in clientsStatusList])
-        fractionServerTime = sumAgrServerTime / sumClientElapsedTime if (sumClientElapsedTime > 0) else 0.0
+        sumAgrClientTime = sum([clientStatus["time"]["agrclient"] for clientStatus in clientsStatusList])
+        sumAgrCrawlerTime = sum([clientStatus["time"]["agrcrawler"] for clientStatus in clientsStatusList])
+        sumAgrTotalTime = sumAgrServerTime + sumAgrClientTime
+        #fractionServerTime = sumAgrServerTime / sumClientElapsedTime if (sumClientElapsedTime > 0) else 0.0
+        fractionServerTime = sumAgrServerTime / sumAgrTotalTime if (sumAgrTotalTime > 0) else 0.0
         proportionalServerTime = fractionServerTime * elapsedTime.seconds
         proportionalServerMinSec = divmod(proportionalServerTime, 60)
         proportionalServerHoursMin = divmod(proportionalServerMinSec[0], 60)
         proportionalServerTimePercent = fractionServerTime * 100
-        sumAgrClientTime = sum([clientStatus["time"]["agrclient"] for clientStatus in clientsStatusList])
-        fractionClientTime = sumAgrClientTime / sumClientElapsedTime if (sumClientElapsedTime > 0) else 0.0
+        #fractionClientTime = sumAgrClientTime / sumClientElapsedTime if (sumClientElapsedTime > 0) else 0.0
+        fractionClientTime = sumAgrClientTime / sumAgrTotalTime if (sumAgrTotalTime > 0) else 0.0
         proportionalClientTime = fractionClientTime * elapsedTime.seconds
         proportionalClientMinSec = divmod(proportionalClientTime, 60)
         proportionalClientHoursMin = divmod(proportionalClientMinSec[0], 60)
         proportionalClientTimePercent = fractionClientTime * 100
-        sumAgrCrawlerTime = sum([clientStatus["time"]["agrcrawler"] for clientStatus in clientsStatusList])
-        fractionCrawlerTime = sumAgrCrawlerTime / sumClientElapsedTime if (sumClientElapsedTime > 0) else 0.0
+        #fractionCrawlerTime = sumAgrCrawlerTime / sumClientElapsedTime if (sumClientElapsedTime > 0) else 0.0
+        fractionCrawlerTime = sumAgrCrawlerTime / sumAgrTotalTime if (sumAgrTotalTime > 0) else 0.0
         proportionalCrawlerTime = fractionCrawlerTime * elapsedTime.seconds
         proportionalCrawlerMinSec = divmod(proportionalCrawlerTime, 60)
         proportionalCrawlerHoursMin = divmod(proportionalCrawlerMinSec[0], 60)

@@ -245,11 +245,11 @@ class FilePersistenceHandler(MemoryPersistenceHandler):
                 self.lastSaveTime = datetime.now()
         
     def _dump(self):
-        self.echo.default("Saving list of resources to disk...")
+        self.echo.out("Saving list of resources to disk...")
         with tempfile.NamedTemporaryFile(mode = "w", suffix = ".temp", prefix = "dump_", dir = "", delete = False) as temp: 
             self.fileHandler.dump(self.resources, temp)
         common.replace(temp.name, self.config["filename"])
-        self.echo.default("Done.")
+        self.echo.out("Done.")
         
     def _extractConfig(self, configurationsDictionary):
         MemoryPersistenceHandler._extractConfig(self, configurationsDictionary)

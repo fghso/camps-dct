@@ -22,12 +22,12 @@ class Crawler:
     def crawl(self, resourceID, filters):
         echo = common.EchoHandler(self.config)
 
-        echo.default("Resource received: %s" % resourceID)
+        echo.out("Resource received: %s" % resourceID)
         
         sleepTime = 30
-        echo.default("Sleeping for %d seconds..." % sleepTime)
+        echo.out("Sleeping for %d seconds..." % sleepTime)
         time.sleep(sleepTime)
-        echo.default("Awaked!\n")
+        echo.out("Awaked!\n")
         
         newResources = []
         newResources.append((resourceID + 1, {"crawler_name": "c1", "response_code": 3}))

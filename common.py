@@ -2,9 +2,10 @@
 
 import sys
 import socket
+import traceback
+import inspect
 import json
 import logging
-import inspect
 import calendar
 import xmltodict
 from datetime import datetime
@@ -82,15 +83,17 @@ class EchoHandler():
         if ("verbose" not in configurationsDictionary): self.verbose = False
         else: self.verbose = str2bool(configurationsDictionary["verbose"])
         
-    def default(self, message, loggingLevel = ""):
-        if (self.logging): self.logger.log(getattr(logging, loggingLevel, self.logger.getEffectiveLevel()), message)
-        if (self.verbose): 
-            if (loggingLevel): print loggingLevel + ": " + message + "\n",
-            else: print message + "\n",
-        
-    def exception(self, message):
-        if (self.logging): self.logger.exception(message)
-        if (self.verbose): print "ERROR: " + message + "\n",
+    def out(self, message, loggingLevel = "", mode = "both"):
+        if ((self.logging) and (mode != "printonly")): 
+            if (loggingLevel == "EXCEPTION"): self.logger.exception(message)
+            else: self.logger.log(getattr(logging, loggingLevel, self.logger.getEffectiveLevel()), message)
+            
+        if ((self.verbose) and (mode != "logonly")):
+            if (loggingLevel == "EXCEPTION"):
+                print "EXCEPTION: %s\n" % message,
+                traceback.print_exc()
+            elif (loggingLevel): print "%s: %s\n" % (loggingLevel, message),
+            else: print "%s\n" % message,
         
         
 # ==================== Methods ====================
