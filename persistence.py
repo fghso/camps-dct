@@ -157,7 +157,7 @@ class FilePersistenceHandler(MemoryPersistenceHandler):
                 if (resource["status"] != 0): element[self.statusColumn] = resource["status"]
                 if (resource["info"]): 
                     for key, value in resource["info"].iteritems(): 
-                        if (value) and (key in self.infoColNames): element[key] = value
+                        if (value is not None) and (key in self.infoColNames): element[key] = value
                 file.write("%s%s" % (separator, json.dumps(element)))
                 separator = ", "
             file.write("]}")
@@ -201,7 +201,7 @@ class FilePersistenceHandler(MemoryPersistenceHandler):
                 if (resource["status"] != 0): row[self.statusColumn] = self._csvUnparseValue(resource["status"])
                 if (resource["info"]):
                     for key, value in resource["info"].iteritems():
-                        if (value) and (key in self.infoColNames): row[key] = self._csvUnparseValue(value)
+                        if (value is not None) and (key in self.infoColNames): row[key] = self._csvUnparseValue(value)
                 writer.writerow(row)
 
     def __init__(self, configurationsDictionary): 

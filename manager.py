@@ -129,8 +129,8 @@ else:
             for clientStatus in clientsStatusList:
                 clientStatus["clientid"] = "#%d" % clientStatus["clientid"]
                 clientStatus["threadstate"] = " " if (clientStatus["threadstate"] == 0) else ("-" if (clientStatus["threadstate"] == -1) else "+")
-                elapsedTime = serverStatus["time"]["current"] - clientStatus["time"]["start"]
-                elapsedMinSec = divmod(elapsedTime.seconds, 60)
+                elapsedTime = (serverStatus["time"]["current"] - serverStatus["time"]["start"]).total_seconds()
+                elapsedMinSec = divmod(elapsedTime, 60)
                 elapsedHoursMin = divmod(elapsedMinSec[0], 60)
                 status += "  %3s %s %s (%s:%s/%s): %s since %s [%d processed in %s]\n" % (
                             clientStatus["clientid"], 
@@ -148,8 +148,8 @@ else:
         else:
             status += "  No client connected right now.\n"
 
-        elapsedTime = serverStatus["time"]["current"] - serverStatus["time"]["start"]
-        elapsedMinSec = divmod(elapsedTime.seconds, 60)
+        elapsedTime = (serverStatus["time"]["current"] - serverStatus["time"]["start"]).total_seconds()
+        elapsedMinSec = divmod(elapsedTime, 60)
         elapsedHoursMin = divmod(elapsedMinSec[0], 60)
         
         clientsTotal = float(len(clientsStatusList))
@@ -174,26 +174,26 @@ else:
         resourcesErrorPercent = ((resourcesError / resourcesTotal) * 100) if (resourcesTotal > 0) else 0.0
         resourcesProcessedPercent = ((resourcesProcessed / resourcesTotal) * 100) if (resourcesTotal > 0) else 0.0
         
-        #sumClientElapsedTime = sum([(serverStatus["time"]["current"] - clientStatus["time"]["start"]).seconds for clientStatus in clientsStatusList])
+        sumClientElapsedTime = sum([(serverStatus["time"]["current"] - clientStatus["time"]["start"]).total_seconds() for clientStatus in clientsStatusList])
         sumAgrServerTime = sum([clientStatus["time"]["agrserver"] for clientStatus in clientsStatusList])
         sumAgrClientTime = sum([clientStatus["time"]["agrclient"] for clientStatus in clientsStatusList])
         sumAgrCrawlerTime = sum([clientStatus["time"]["agrcrawler"] for clientStatus in clientsStatusList])
         sumAgrTotalTime = sumAgrServerTime + sumAgrClientTime
-        #fractionServerTime = sumAgrServerTime / sumClientElapsedTime if (sumClientElapsedTime > 0) else 0.0
-        fractionServerTime = sumAgrServerTime / sumAgrTotalTime if (sumAgrTotalTime > 0) else 0.0
-        proportionalServerTime = fractionServerTime * elapsedTime.seconds
+        fractionServerTime = sumAgrServerTime / sumClientElapsedTime if (sumClientElapsedTime > 0) else 0.0
+        #fractionServerTime = sumAgrServerTime / sumAgrTotalTime if (sumAgrTotalTime > 0) else 0.0
+        proportionalServerTime = fractionServerTime * elapsedTime
         proportionalServerMinSec = divmod(proportionalServerTime, 60)
         proportionalServerHoursMin = divmod(proportionalServerMinSec[0], 60)
         proportionalServerTimePercent = fractionServerTime * 100
-        #fractionClientTime = sumAgrClientTime / sumClientElapsedTime if (sumClientElapsedTime > 0) else 0.0
-        fractionClientTime = sumAgrClientTime / sumAgrTotalTime if (sumAgrTotalTime > 0) else 0.0
-        proportionalClientTime = fractionClientTime * elapsedTime.seconds
+        fractionClientTime = sumAgrClientTime / sumClientElapsedTime if (sumClientElapsedTime > 0) else 0.0
+        #fractionClientTime = sumAgrClientTime / sumAgrTotalTime if (sumAgrTotalTime > 0) else 0.0
+        proportionalClientTime = fractionClientTime * elapsedTime
         proportionalClientMinSec = divmod(proportionalClientTime, 60)
         proportionalClientHoursMin = divmod(proportionalClientMinSec[0], 60)
         proportionalClientTimePercent = fractionClientTime * 100
-        #fractionCrawlerTime = sumAgrCrawlerTime / sumClientElapsedTime if (sumClientElapsedTime > 0) else 0.0
-        fractionCrawlerTime = sumAgrCrawlerTime / sumAgrTotalTime if (sumAgrTotalTime > 0) else 0.0
-        proportionalCrawlerTime = fractionCrawlerTime * elapsedTime.seconds
+        fractionCrawlerTime = sumAgrCrawlerTime / sumClientElapsedTime if (sumClientElapsedTime > 0) else 0.0
+        #fractionCrawlerTime = sumAgrCrawlerTime / sumAgrTotalTime if (sumAgrTotalTime > 0) else 0.0
+        proportionalCrawlerTime = fractionCrawlerTime * elapsedTime
         proportionalCrawlerMinSec = divmod(proportionalCrawlerTime, 60)
         proportionalCrawlerHoursMin = divmod(proportionalCrawlerMinSec[0], 60)
         proportionalCrawlerTimePercent = fractionCrawlerTime * 100

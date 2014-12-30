@@ -12,7 +12,6 @@ class BaseFilter():
         
     def _extractConfig(self, configurationsDictionary):
         self.config = configurationsDictionary
-    
         if ("name" in self.config): self.name = self.config["name"]
         else: self.name = self.__class__.__name__
     
@@ -22,7 +21,7 @@ class BaseFilter():
     # The parameter extraInfo is a reference to a dictionary and can be used to pass information among 
     # sequential filters. It is not send to clients and its value will always be None if the filter is 
     # executed in parallel
-    def apply(self, resourceID, resourceInfo, extraInfo): pass
+    def apply(self, resourceID, resourceInfo, extraInfo): return {}
         
     # Callback is called when a client is done in crawling its designated resource. Sequential filters
     # receive the parameters resourceInfo, newResources and extraInfo as references, so they can alter 

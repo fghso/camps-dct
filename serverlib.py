@@ -19,7 +19,7 @@ from copy import deepcopy
 # Dictionary to store information lists about each client:
 #   [network address, process identification (PID), primary key of the resource being collected, 
 #    ID of the resource being collected, number of resources already collected, 
-#    collection start time and last GET_ID requested time] 
+#    collection start time and last GET_ID request time] 
 clientsInfo = {} 
 
 # Store a reference for the thread running the client and an event to interrupt its execution
