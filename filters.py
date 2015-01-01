@@ -45,9 +45,9 @@ class SaveResourcesFilter(BaseFilter):
     def setup(self): self.persist.setup()
         
     def callback(self, resourceID, resourceInfo, newResources, extraInfo):
-        if (self.config["parallel"]): newResources = extraInfo[self.name]
-        else: newResources = extraInfo["original"][self.name]
-        self.persist.insert(newResources)
+        if (self.config["parallel"]): extraResources = extraInfo[self.name]
+        else: extraResources = extraInfo["original"][self.name]
+        self.persist.insert(extraResources)
         
     def finish(self): self.persist.finish()
     def shutdown(self): self.persist.shutdown()

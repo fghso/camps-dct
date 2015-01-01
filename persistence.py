@@ -5,6 +5,7 @@ import threading
 import json
 import csv
 import tempfile
+import glob
 import common
 import mysql.connector
 from datetime import datetime
@@ -274,6 +275,35 @@ class FilePersistenceHandler(MemoryPersistenceHandler):
 
     def shutdown(self): 
         with self.saveLock: self._dump()
+        
+# This class must be used for insertions only (e.g. SaveResourcesFilter). Do not use it directly 
+# as a persistence handler for the server, since the behaviour will be completely wrong        
+class RolloverFilePersistenceHandler(FilePersistenceHandler):
+    def __init__(self, configurationsDictionary): 
+        FilePersistenceHandler.__init__(self, configurationsDictionary)
+        # Avoid to override rollover files already existent
+        oldFiles = glob.glob(self.config["filename"] + ".*")
+        suffixes = [int(name.rsplit(".", 1)[1]) for name in oldFiles]
+        self.nextNumber = max(suffixes) + 1 if (suffixes) else 1
+
+    def _extractConfig(self, configurationsDictionary):
+        FilePersistenceHandler._extractConfig(self, configurationsDictionary)
+        if ("rolloverthreshold" not in self.config): self.config["rolloverthreshold"] = 0
+        else: self.config["rolloverthreshold"] = int(self.config["rolloverthreshold"])
+        if (self.config["rolloverthreshold"] < 0): raise ValueError("Parameter rolloverthreshold must be 0 or greater.")
+
+    def _dump(self):
+        self.echo.out("Saving list of resources to disk...")
+        with tempfile.NamedTemporaryFile(mode = "w", suffix = ".temp", prefix = "dump_", dir = "", delete = False) as temp: 
+            self.fileHandler.dump(self.resources, temp)
+        # Do rollover if file size is greater than threshold
+        if (self.config["rolloverthreshold"] > 0) and (os.path.getsize(temp.name) >= self.config["rolloverthreshold"]):
+            common.replace(temp.name, "%s.%d" % (self.config["filename"], self.nextNumber))
+            open(self.config["filename"], "w").close()
+            self.resources[:] = []
+            self.nextNumber += 1    
+        else: common.replace(temp.name, self.config["filename"])
+        self.echo.out("Done.")
         
         
 class MySQLPersistenceHandler(BasePersistenceHandler):
