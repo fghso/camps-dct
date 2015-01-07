@@ -2,16 +2,17 @@
 
 import os
 import threading
+import tempfile
+import cStringIO
+import glob
+import re
 import json
 import csv
-import tempfile
-import glob
 import common
 import mysql.connector
 from datetime import datetime
 from copy import deepcopy
 from collections import deque
-from collections import OrderedDict
 
 
 class StatusCodes():
@@ -23,8 +24,9 @@ class StatusCodes():
 
 
 class BasePersistenceHandler():  
-    globalIDsHash = {}
-    def __init__(self, configurationsDictionary): self.status = StatusCodes() # Receives a copy of everything in the handler section of the XML configuration file as the parameter configurationsDictionary
+    def __init__(self, configurationsDictionary): # Receives a copy of everything in the handler section of the XML configuration file as the parameter configurationsDictionary
+        self.config = configurationsDictionary
+        self.status = StatusCodes() 
     def setup(self): pass # Called when a connection to a client is opened
     def select(self): return (None, None, None) # Returns a tuple: (resource unique key, resource id, resource info dictionary)
     def update(self, resourceKey, status, resourceInfo): pass
@@ -50,7 +52,23 @@ class MemoryPersistenceHandler(BasePersistenceHandler):
                               self.status.FAILED:     [],
                               self.status.ERROR:      []}
         #self._loadTestData()
+            
+    def _extractConfig(self, configurationsDictionary):
+        if ("uniqueresourceid" not in self.config): self.config["uniqueresourceid"] = False
+        else: self.config["uniqueresourceid"] = common.str2bool(self.config["uniqueresourceid"])
+    
+        if ("onduplicateupdate" not in self.config): self.config["onduplicateupdate"] = False
+        else: self.config["onduplicateupdate"] = common.str2bool(self.config["onduplicateupdate"])
         
+    def _save(self, pk, id, status, info, changeInfo = True):
+        if (pk is not None):
+            if (status is not None): self.resources[pk]["status"] = status
+            if (changeInfo): 
+                if (self.resources[pk]["info"] is not None) and (info is not None): self.resources[pk]["info"].update(info)
+                else: self.resources[pk]["info"] = info
+        else: 
+            self.resources.append({"id": id, "status": status, "info": info})
+            
     def _loadTestData(self):
         self.resources.extend([
             {"id": 1, "status": 0, "info": {"crawler_name": "c1", "response_code": 3}},
@@ -63,50 +81,32 @@ class MemoryPersistenceHandler(BasePersistenceHandler):
             if (self.config["uniqueresourceid"]): 
                 if (resource["id"] not in self.IDsHash): self.IDsHash[resource["id"]] = pk
                 else: raise KeyError("Duplicated ID found in resources list: %s." % resource["id"])
-            
-    def _extractConfig(self, configurationsDictionary):
-        self.config = configurationsDictionary
-        
-        if ("uniqueresourceid" not in self.config): self.config["uniqueresourceid"] = False
-        else: self.config["uniqueresourceid"] = common.str2bool(self.config["uniqueresourceid"])
-    
-        if ("onduplicateupdate" not in self.config): self.config["onduplicateupdate"] = False
-        else: self.config["onduplicateupdate"] = common.str2bool(self.config["onduplicateupdate"])
-        
-    def _save(self, list, pk, id, status, info, changeInfo = True):
-        if (pk is not None):
-            if (status is not None): list[pk]["status"] = status
-            if (changeInfo): 
-                if (list[pk]["info"] is not None) and (info is not None): list[pk]["info"].update(info)
-                else: list[pk]["info"] = info
-        else: 
-            list.append({"id": id, "status": status, "info": info})
     
     def select(self): 
         try: pk = self.statusRecords[self.status.AVAILABLE].popleft()
         except IndexError: return (None, None, None)
-        self._save(self.resources, pk, None, self.status.INPROGRESS, None, False)
+        self._save(pk, None, self.status.INPROGRESS, None, False)
         self.statusRecords[self.status.INPROGRESS].append(pk)
         return (pk, self.resources[pk]["id"], deepcopy(self.resources[pk]["info"]))
     
     def update(self, resourceKey, status, resourceInfo): 
         currentStatus = self.resources[resourceKey]["status"]
         self.statusRecords[currentStatus].remove(resourceKey)
-        if (resourceInfo): self._save(self.resources, resourceKey, None, status, resourceInfo)
-        else: self._save(self.resources, resourceKey, None, status, resourceInfo, False)
+        if (resourceInfo): self._save(resourceKey, None, status, resourceInfo)
+        else: self._save(resourceKey, None, status, resourceInfo, False)
         self.statusRecords[status].append(resourceKey)
         
     def insert(self, resourcesList): 
         for resourceID, resourceInfo in resourcesList:
             if (self.config["uniqueresourceid"]) and (resourceID in self.IDsHash):
                 if (self.config["onduplicateupdate"]): 
-                    self._save(self.resources, self.IDsHash[resourceID], None, None, resourceInfo)
+                    self._save(self.IDsHash[resourceID], None, None, resourceInfo)
                     continue
                 else: raise KeyError("Cannot insert resource, ID %s already exists." % resourceID)
             with self.insertLock:
                 self.statusRecords[self.status.AVAILABLE].append(len(self.resources))
                 if (self.config["uniqueresourceid"]): self.IDsHash[resourceID] = len(self.resources)
-                self._save(self.resources, None, resourceID, self.status.AVAILABLE, resourceInfo)
+                self._save(None, resourceID, self.status.AVAILABLE, resourceInfo)
         
     def count(self): 
         return (len(self.resources), 
@@ -120,51 +120,79 @@ class MemoryPersistenceHandler(BasePersistenceHandler):
         resetList = self.statusRecords[status][:]
         for pk in resetList:
             self.statusRecords[status].remove(pk)
-            self._save(self.resources, pk, None, self.status.AVAILABLE, None, False)
+            self._save(pk, None, self.status.AVAILABLE, None, False)
             self.statusRecords[self.status.AVAILABLE].appendleft(pk)
         return len(resetList)
             
         
 class FilePersistenceHandler(MemoryPersistenceHandler):
+    class GenericFileTypeColumns():
+        def __init__(self, fileName, idColumn, statusColumn):
+            self.names = self._extractColNames(fileName)
+            self.idName = idColumn
+            self.statusName = statusColumn
+            self.infoNames = [name for name in self.names if (name not in (self.idName, self.statusName))]
+        # This method must be overriden to extract the column names for the specific file type
+        def _extractColNames(self, fileName): pass 
+
     class GenericFileTypeHandler():
-        def __init__(self, idColumn, statusColumn):
-            self.idColumn = idColumn
-            self.statusColumn = statusColumn
-        def load(self, file): yield None # Generator that yields resources in the format {"id": X, "status": X, "info": {...}}
-        def dump(self, resources, file): pass
+        # Resource internal representation format: {"id": X, "status": X, "info": {...}}
+        def parse(self, resource, columns): pass # Transform resource from file format to internal representation format
+        def unparse(self, resource, columns): pass # Transform resource from internal representation format to file format
+        def load(self, file, columns): yield None # Generator that yields resources in the internal representation format 
+        def dump(self, resources, file, columns): pass # Save a list of resources in internal representation format to file
+        
+    class JSONColumns(GenericFileTypeColumns):
+        def _extractColNames(self, fileName):
+            with open(fileName, "r") as file: content = file.read(1024)
+            columnsStart = content.index("[") + 1
+            columnsEnd = content.index("]")
+            columns = content[columnsStart:columnsEnd]
+            return [name.strip("\" ") for name in columns.split(",")]
        
     class JSONHandler(GenericFileTypeHandler):    
-        def load(self, file): 
+        def parse(self, resource, columns):
+            parsed = {"id": resource[columns.idName]}
+            if ((columns.statusName in columns.names) and (columns.statusName in resource)): 
+                parsed["status"] = resource[columns.statusName]
+            else: parsed["status"] = 0
+            if (columns.infoNames):
+                parsed["info"] = {}
+                for column in columns.infoNames:
+                    if (column in resource): parsed["info"][column] = resource[column]
+                    else: parsed["info"][column] = None
+            return parsed
+        
+        def unparse(self, resource, columns):
+            unparsed = {columns.idName: resource["id"]}
+            if (resource["status"] != 0): unparsed[columns.statusName] = resource["status"]
+            if (resource["info"]): 
+                for key, value in resource["info"].iteritems(): 
+                    if (value is not None) and (key in columns.infoNames): unparsed[key] = value
+            return json.dumps(unparsed)
+    
+        def load(self, file, columns): 
             input = json.load(file)
-            self.colNames = input["columns"]
-            self.infoColNames = [name for name in self.colNames if (name not in (self.idColumn, self.statusColumn))]
-            for element in input["resources"]: 
-                resource = {"id": element[self.idColumn]}
-                if ((self.statusColumn in self.colNames) and (self.statusColumn in element)): 
-                    resource["status"] = element[self.statusColumn]
-                else: resource["status"] = 0
-                if (self.infoColNames):
-                    resource["info"] = {}
-                    for column in self.infoColNames:
-                        if (column in element): resource["info"][column] = element[column]
-                        else: resource["info"][column] = None
-                yield resource
+            for resource in input["resources"]: 
+                yield self.parse(resource, columns)
 
-        def dump(self, resources, file):
-            file.write("{\"columns\": %s, \"resources\": [" % json.dumps(self.colNames))
+        def dump(self, resources, file, columns):
+            file.write("{\"columns\": %s, \"resources\": [" % json.dumps(columns.names))
             separator = ""
             for resource in resources:
-                element = {self.idColumn: resource["id"]}
-                if (resource["status"] != 0): element[self.statusColumn] = resource["status"]
-                if (resource["info"]): 
-                    for key, value in resource["info"].iteritems(): 
-                        if (value is not None) and (key in self.infoColNames): element[key] = value
-                file.write("%s%s" % (separator, json.dumps(element)))
+                file.write("%s%s" % (separator, self.unparse(resource, columns)))
                 separator = ", "
             file.write("]}")
+            
+    class CSVColumns(GenericFileTypeColumns):
+        def _extractColNames(self, fileName):
+            with open(fileName, "r") as file: 
+                reader = csv.DictReader(file, quoting = csv.QUOTE_NONE, skipinitialspace = True)
+                columns = reader.fieldnames
+            return columns
     
     class CSVHandler(GenericFileTypeHandler):
-        def _csvParseValue(self, value):
+        def _parseValue(self, value):
             if (not value): return None
             if (not value.startswith("\"")):
                 if value.lower() in ("true", "t"): return True
@@ -174,136 +202,253 @@ class FilePersistenceHandler(MemoryPersistenceHandler):
                 return int(value)
             return value.strip("\"") 
         
-        def _csvUnparseValue(self, value):
+        def _unparseValue(self, value):
             if isinstance(value, basestring): return "".join(("\"", value, "\""))
             if isinstance(value, bool): return ("T" if (value) else "F")
             return value
             
-        def load(self, file):
-            reader = csv.DictReader(file, quoting = csv.QUOTE_NONE, skipinitialspace = True)
-            self.colNames = reader.fieldnames
-            self.infoColNames = [name for name in self.colNames if (name not in (self.idColumn, self.statusColumn))]
-            for row in reader:
-                resource = {"id": self._csvParseValue(row[self.idColumn])}
-                if ((self.statusColumn in self.colNames) and (row[self.statusColumn])): 
-                    resource["status"] = self._csvParseValue(row[self.statusColumn])
-                else: resource["status"] = 0
-                if (self.infoColNames):
-                    resource["info"] = {}
-                    for column in self.infoColNames:
-                        resource["info"][column] = self._csvParseValue(row[column])
-                yield resource
+        def parse(self, resource, columns):
+            parsed = {"id": self._parseValue(resource[columns.idName])}
+            if ((columns.statusName in columns.names) and (resource[columns.statusName])): 
+                parsed["status"] = self._parseValue(resource[columns.statusName])
+            else: parsed["status"] = 0
+            if (columns.infoNames):
+                parsed["info"] = {}
+                for column in columns.infoNames:
+                    parsed["info"][column] = self._parseValue(resource[column])
+            return parsed
         
-        def dump(self, resources, file):
-            writer = csv.DictWriter(file, self.colNames, quoting = csv.QUOTE_NONE, escapechar = "", quotechar = "", lineterminator = "\n", extrasaction = "ignore")
+        def unparse(self, resource, columns):
+            buffer = cStringIO.StringIO()
+            writer = csv.DictWriter(buffer, columns.names, quoting = csv.QUOTE_NONE, escapechar = "", quotechar = "", lineterminator = "\n", extrasaction = "ignore")
+            unparsed = {columns.idName: self._unparseValue(resource["id"])}
+            if (resource["status"] != 0): unparsed[columns.statusName] = self._unparseValue(resource["status"])
+            if (resource["info"]):
+                for key, value in resource["info"].iteritems():
+                    if (value is not None) and (key in columns.infoNames): unparsed[key] = self._unparseValue(value)
+            writer.writerow(unparsed)
+            return buffer.getvalue()
+            
+        def load(self, file, columns):
+            reader = csv.DictReader(file, quoting = csv.QUOTE_NONE, skipinitialspace = True)
+            for resource in reader:
+                yield self.parse(resource, columns)
+        
+        def dump(self, resources, file, columns):
+            writer = csv.DictWriter(file, columns.names, quoting = csv.QUOTE_NONE, escapechar = "", quotechar = "", lineterminator = "\n", extrasaction = "ignore")
             writer.writeheader()
+            # In case of CSV, it is easier and faster to unparse the resource here, 
+            # so we can use writerow method to directly save the resource to file
             for resource in resources:
-                row = {self.idColumn: self._csvUnparseValue(resource["id"])}
-                if (resource["status"] != 0): row[self.statusColumn] = self._csvUnparseValue(resource["status"])
+                row = {columns.idName: self._unparseValue(resource["id"])}
+                if (resource["status"] != 0): row[columns.statusName] = self._unparseValue(resource["status"])
                 if (resource["info"]):
                     for key, value in resource["info"].iteritems():
-                        if (value is not None) and (key in self.infoColNames): row[key] = self._csvUnparseValue(value)
+                        if (value is not None) and (key in columns.infoNames): row[key] = self._unparseValue(value)
                 writer.writerow(row)
 
     def __init__(self, configurationsDictionary): 
         MemoryPersistenceHandler.__init__(self, configurationsDictionary)
-        self._setFileHandler()
         self.echo = common.EchoHandler()
         self.saveLock = threading.Lock()
+        self.dumpExceptionEvent = threading.Event()
+        self.timer = threading.Timer(self.config["savetimedelta"], self.timelyDump)
+        self.timer.daemon = True
+        self._setFileHandler()
         file = open(self.config["filename"], "r")
         try:
-            resourcesList = self.fileHandler.load(file)
+            resourcesList = self.fileHandler.load(file, self.fileColumns)
             for resource in resourcesList:
                 self.statusRecords[resource["status"]].append(len(self.resources))
                 if (self.config["uniqueresourceid"]): 
                     if (resource["id"] not in self.IDsHash): self.IDsHash[resource["id"]] = len(self.resources)
-                    else: raise KeyError("Duplicated ID found in resources list: %s." % resource["id"]) 
+                    else: raise KeyError("Duplicated ID found in '%s': %s." % (self.config["filename"], resource["id"])) 
                 if ("info" not in resource): resource["info"] = None
                 self.resources.append(resource)
         except: raise
         finally: file.close()
-        self.lastSaveTime = datetime.now()
-    
-    # Define internal file handler based on file type. Change this function to add support to other file types
-    def _setFileHandler(self):
-        fileName = self.config["filename"]
-        idColumn = self.config["resourceidcolumn"]
-        statusColumn = self.config["statuscolumn"]
-    
-        # Extract file type based on file extension
-        fileType = os.path.splitext(fileName)[1][1:].lower()
-        
-        # Set file handler
-        if (fileType == "json"): self.fileHandler = self.JSONHandler(idColumn, statusColumn)
-        elif (fileType == "csv"): self.fileHandler = self.CSVHandler(idColumn, statusColumn)
-        else: raise TypeError("Unknown file type '%s'." % fileName)
-        
-    def _checkTimeDelta(self):
-        with self.saveLock:
-            elapsedTime = datetime.now() - self.lastSaveTime
-            if (elapsedTime.seconds >= self.config["savetimedelta"]):
-                self._dump()
-                self.lastSaveTime = datetime.now()
-        
-    def _dump(self):
-        self.echo.out("Saving list of resources to disk...")
-        with tempfile.NamedTemporaryFile(mode = "w", suffix = ".temp", prefix = "dump_", dir = "", delete = False) as temp: 
-            self.fileHandler.dump(self.resources, temp)
-        common.replace(temp.name, self.config["filename"])
-        self.echo.out("Done.")
+        self.timer.start()
         
     def _extractConfig(self, configurationsDictionary):
         MemoryPersistenceHandler._extractConfig(self, configurationsDictionary)
+        
+        if ("filetype" in self.config): self.config["filetype"] = self.config["filetype"].lower()
+        else: self.config["filetype"] = os.path.splitext(self.config["filename"])[1][1:].lower()
+        
         self.config["savetimedelta"] = int(self.config["savetimedelta"])
-        if (self.config["savetimedelta"] < 1): raise ValueError("Parameter savetimedelta must be greater than 1 second.")
+        if (self.config["savetimedelta"] < 1): raise ValueError("Parameter savetimedelta must be greater than zero.")
     
-    def _save(self, list, pk, id, status, info, changeInfo = True):
-        with self.saveLock: MemoryPersistenceHandler._save(self, list, pk, id, status, info, changeInfo)
+    def _save(self, pk, id, status, info, changeInfo = True):
+        with self.saveLock: MemoryPersistenceHandler._save(self, pk, id, status, info, changeInfo)
+    
+    # Define internal file handler based on file type. Change this function to add support to other file types
+    def _setFileHandler(self):
+        if (self.config["filetype"] == "json"): 
+            self.fileColumns = self.JSONColumns(self.config["filename"], self.config["resourceidcolumn"], self.config["statuscolumn"])
+            self.fileHandler = self.JSONHandler()
+        elif (self.config["filetype"] == "csv"): 
+            self.fileColumns = self.CSVColumns(self.config["filename"], self.config["resourceidcolumn"], self.config["statuscolumn"])
+            self.fileHandler = self.CSVHandler()
+        else: 
+            raise TypeError("Unknown file type '%s'." % self.config["filetype"])
+            
+    def _checkDumpException(function):
+        def decoratedFunction(self, *args):
+            if (self.dumpExceptionEvent.is_set()): 
+                raise RuntimeError("Exception on dump thread. Execution of file persistence handler aborted.")
+            return function(self, *args)
+        return decoratedFunction
                 
-    def update(self, resourceKey, status, resourceInfo): 
-        MemoryPersistenceHandler.update(self, resourceKey, status, resourceInfo)
-        self._checkTimeDelta()
+    def dump(self):
+        self.echo.out("Saving list of resources to file '%s'..." % self.config["filename"])
+        with tempfile.NamedTemporaryFile(mode = "w", suffix = ".temp", prefix = "dump_", dir = "", delete = False) as temp: 
+            with self.saveLock:
+                self.fileHandler.dump(self.resources, temp, self.fileColumns)
+        common.replace(temp.name, self.config["filename"])
+        self.echo.out("Done.")
         
-    def insert(self, resourcesList): 
-        MemoryPersistenceHandler.insert(self, resourcesList)
-        self._checkTimeDelta()
+    def timelyDump(self):
+        try: 
+            self.dump()
+        except Except as error:
+            self.dumpExceptionEvent.set()
+            raise
+        self.timer = threading.Timer(self.config["savetimedelta"], self.timelyDump)
+        self.timer.daemon = True
+        self.timer.start()
         
-    def reset(self, status):    
-        resetedCount = MemoryPersistenceHandler.reset(self, status)    
-        self._checkTimeDelta()
-        return resetedCount
+    @_checkDumpException
+    def select(self): 
+        return MemoryPersistenceHandler.select(self)
 
+    @_checkDumpException
+    def update(self, resourceKey, status, resourceInfo): 
+        return MemoryPersistenceHandler.update(self, resourceKey, status, resourceInfo)
+    
+    @_checkDumpException
+    def insert(self, resourcesList): 
+        return MemoryPersistenceHandler.insert(self, resourcesList)
+    
+    @_checkDumpException
+    def count(self): 
+        return MemoryPersistenceHandler.count(self)
+    
+    @_checkDumpException
+    def reset(self, status): 
+        return MemoryPersistenceHandler.reset(self, status)
+                
     def shutdown(self): 
-        with self.saveLock: self._dump()
+        self.timer.cancel()
+        self.dump()
         
-# This class must be used for insertions only (e.g. SaveResourcesFilter). Do not use it directly 
-# as a persistence handler for the server, since the behaviour will be completely wrong        
+        
 class RolloverFilePersistenceHandler(FilePersistenceHandler):
     def __init__(self, configurationsDictionary): 
-        FilePersistenceHandler.__init__(self, configurationsDictionary)
-        # Avoid to override rollover files already existent
-        oldFiles = glob.glob(self.config["filename"] + ".*")
-        suffixes = [int(name.rsplit(".", 1)[1]) for name in oldFiles]
-        self.nextNumber = max(suffixes) + 1 if (suffixes) else 1
-
+        self.originalConfig = deepcopy(configurationsDictionary)
+        MemoryPersistenceHandler.__init__(self, configurationsDictionary)
+        self.echo = common.EchoHandler()
+        self._setFileHandler()
+        self.fileHandlersList = []
+        self.nextSuffixNumber = 1
+        self.insertHandlerIndex = 0
+        self.insertSize = -1
+        self.insertAmount = -1
+        
+        # Iterate over old rollover files to get file names and max suffix number already used
+        fileNamesList = [self.config["filename"]]
+        for name in glob.iglob(self.config["filename"] + ".*"):
+            if re.search("\.[0-9]+$", name):
+                fileNamesList.append(name)
+                suffixNumber = int(name.rsplit(".", 1)[1])
+                if (suffixNumber >= self.nextSuffixNumber): self.nextSuffixNumber = suffixNumber + 1
+        
+        # Initialize file persistence handlers
+        for fileName in fileNamesList: self._addHandler(fileName)
+        
+        # Get initial file size and amount
+        if (self.config["sizethreshold"]): self.insertSize = os.path.getsize(self.config["filename"])
+        if (self.config["amountthreshold"]): self.insertAmount = len(self.fileHandlersList[self.insertHandlerIndex].resources)
+                    
     def _extractConfig(self, configurationsDictionary):
         FilePersistenceHandler._extractConfig(self, configurationsDictionary)
-        if ("rolloverthreshold" not in self.config): self.config["rolloverthreshold"] = 0
-        else: self.config["rolloverthreshold"] = int(self.config["rolloverthreshold"])
-        if (self.config["rolloverthreshold"] < 0): raise ValueError("Parameter rolloverthreshold must be 0 or greater.")
+    
+        if ("sizethreshold" not in self.config): self.config["sizethreshold"] = 0
+        else: self.config["sizethreshold"] = int(self.config["sizethreshold"])
+        
+        if ("amountthreshold" not in self.config): self.config["amountthreshold"] = 0
+        else: self.config["amountthreshold"] = int(self.config["amountthreshold"])
+        
+        if (self.config["sizethreshold"] < 0): raise ValueError("Parameter sizethreshold must be zero or greater.")
+        if (self.config["amountthreshold"] < 0): raise ValueError("Parameter amountthreshold must be zero or greater.")
+        if (self.config["sizethreshold"] == 0) and (self.config["amountthreshold"] == 0): 
+            raise ValueError("Parameters sizethreshold and amountthreshold cannot be zero at the same time.")
+            
+    def _addHandler(self, fileName):
+        config = deepcopy(self.originalConfig)
+        config["filename"] = fileName
+        config["filetype"] = self.config["filetype"]
+        handler = FilePersistenceHandler(config)
+        if (self.config["uniqueresourceid"]): 
+            duplicated = set(handler.IDsHash).intersection(self.IDsHash)
+            if (not duplicated): self.IDsHash.update(dict.fromkeys(handler.IDsHash, len(self.fileHandlersList)))
+            else:
+                details = ["%s ['%s']" % (resourceID, self.fileHandlersList[self.IDsHash[resourceID]].config["filename"]) for resourceID in duplicated]
+                raise KeyError("Duplicated ID(s) found in '%s': %s" % (fileName, ", ".join(details))) 
+        self.fileHandlersList.append(handler)
 
-    def _dump(self):
-        self.echo.out("Saving list of resources to disk...")
-        with tempfile.NamedTemporaryFile(mode = "w", suffix = ".temp", prefix = "dump_", dir = "", delete = False) as temp: 
-            self.fileHandler.dump(self.resources, temp)
-        # Do rollover if file size is greater than threshold
-        if (self.config["rolloverthreshold"] > 0) and (os.path.getsize(temp.name) >= self.config["rolloverthreshold"]):
-            common.replace(temp.name, "%s.%d" % (self.config["filename"], self.nextNumber))
-            open(self.config["filename"], "w").close()
-            self.resources[:] = []
-            self.nextNumber += 1    
-        else: common.replace(temp.name, self.config["filename"])
-        self.echo.out("Done.")
+    def select(self): 
+        for handlerKey, handler in enumerate(self.fileHandlersList): 
+            (resourceKey, resourceID, resourceInfo) = handler.select()
+            if (resourceID): return ((handlerKey, resourceKey), resourceID, resourceInfo)
+        return (None, None, None)    
+    
+    def update(self, keyPair, status, resourceInfo): 
+        self.fileHandlersList[keyPair[0]].update(keyPair[1], status, resourceInfo)
+    
+    def insert(self, resourcesList): 
+        for resourceID, resourceInfo in resourcesList:
+            if (self.config["uniqueresourceid"]) and (resourceID in self.IDsHash):
+                handler = self.fileHandlersList[self.IDsHash[resourceID]]
+                try: handler.insert([(resourceID, resourceInfo)])
+                except KeyError as error: raise KeyError("Cannot insert resource, ID %s already exists in '%s'." % (resourceID, handler.config["filename"]))
+                continue
+        
+            with self.insertLock:
+                handler = self.fileHandlersList[self.insertHandlerIndex]
+      
+                # If size or amount thresholds were exceeded, change insert handler. If there is no more
+                # handlers in the list, open a new file and instantiate a new handler to take care of it
+                while ((self.insertSize >= self.config["sizethreshold"]) or 
+                       (self.insertAmount >= self.config["amountthreshold"])):
+                    self.insertHandlerIndex += 1
+                    if (self.insertHandlerIndex >= len(self.fileHandlersList)): 
+                        newFileName = "%s.%d" % (self.config["filename"], self.nextSuffixNumber)
+                        with open(newFileName, "w") as file: self.fileHandler.dump([], file, self.fileColumns)
+                        self._addHandler(newFileName)
+                        self.nextSuffixNumber += 1
+                    handler = self.fileHandlersList[self.insertHandlerIndex]    
+                    if (self.config["sizethreshold"]): self.insertSize = os.path.getsize(handler.config["filename"])
+                    if (self.config["amountthreshold"]): self.insertAmount = len(handler.resources)
+                
+                handler.insert([(resourceID, resourceInfo)])
+                if (self.config["uniqueresourceid"]): self.IDsHash[resourceID] = self.insertHandlerIndex
+                
+                if (self.config["sizethreshold"]): 
+                    self.insertSize += len(self.fileHandler.unparse(handler.resources[-1], self.fileColumns))
+                if (self.config["amountthreshold"]): 
+                    self.insertAmount += 1
+    
+    def count(self):
+        counts = [0] * 6
+        for handler in self.fileHandlersList: 
+            counts = [x + y for x, y in zip(counts, handler.count())]
+        return counts
+    
+    def reset(self, status): 
+        for handler in self.fileHandlersList: handler.reset(status)
+        
+    def shutdown(self): 
+        for handler in self.fileHandlersList: handler.shutdown()
         
         
 class MySQLPersistenceHandler(BasePersistenceHandler):
@@ -325,7 +470,6 @@ class MySQLPersistenceHandler(BasePersistenceHandler):
         connection.close()
         
     def _extractConfig(self, configurationsDictionary):
-        self.config = configurationsDictionary
         if ("onduplicateupdate" not in self.config): self.config["onduplicateupdate"] = False
         else: self.config["onduplicateupdate"] = common.str2bool(self.config["onduplicateupdate"])
         
