@@ -325,7 +325,7 @@ class ServerHandler(SocketServer.BaseRequestHandler):
                 
     def threadedFilterApplyWrapper(self, filter, resourceID, resourceInfo, outputList):
         data = filter.apply(resourceID, deepcopy(resourceInfo), None)
-        outputList.append({"filter": filter.name, "order": None, "data": data})
+        outputList.append({"filter": filter.name, "data": data})
         
     def threadedFilterCallbackWrapper(self, filter, resourceID, resourceInfo, newResources, extraInfo):
         filter.callback(resourceID, deepcopy(resourceInfo), deepcopy(newResources), deepcopy(extraInfo))
@@ -333,12 +333,13 @@ class ServerHandler(SocketServer.BaseRequestHandler):
     def applyFilters(self, resourceID, resourceInfo):
         parallelFilters = self.server.parallelFilters
         sequentialFilters = self.server.sequentialFilters
-        filtersData = []
+        sequentialData = []
+        threadedData = []
     
         # Start threaded filters
         filterThreads = []
         for filter in parallelFilters:
-            t = threading.Thread(target=self.threadedFilterApplyWrapper, args=(filter, resourceID, resourceInfo, filtersData))
+            t = threading.Thread(target=self.threadedFilterApplyWrapper, args=(filter, resourceID, resourceInfo, threadedData))
             filterThreads.append(t)
             t.start()
         
@@ -346,12 +347,13 @@ class ServerHandler(SocketServer.BaseRequestHandler):
         extraInfo = {}
         for filter in sequentialFilters:
             data = filter.apply(resourceID, deepcopy(resourceInfo), extraInfo)
-            filtersData.append({"name": filter.name, "order": sequentialFilters.index(filter), "data": data})
+            sequentialData.append({"name": filter.name, "data": data})
             
         # Wait for threaded filters to finish
         for filter in filterThreads:
             filter.join()
         
+        filtersData = sequentialData + threadedData
         return (filtersData if (filtersData) else None)
         
     def callbackFilters(self, resourceID, resourceInfo, extraInfo, newResources):
