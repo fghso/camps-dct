@@ -1,4 +1,4 @@
-#!/usr/bin/python
+#!/usr/bin/python2
 # -*- coding: iso-8859-1 -*-
 
 import sys
@@ -16,6 +16,7 @@ parser.add_argument("configFilePath")
 parser.add_argument("-h", "--help", action="help", help="show this help message and exit")
 parser.add_argument("-v", "--verbose", metavar="on/off", help="enable/disable log messages on screen")
 parser.add_argument("-g", "--logging", metavar="on/off", help="enable/disable logging on file")
+parser.add_argument("-p", "--loggingPath", metavar="path", help="define path of logging file")
 args = parser.parse_args()
 
 # Add directory of the configuration file to sys.path before import crawler, so that the module can easily 
@@ -26,11 +27,13 @@ import crawler
 
 # Load configurations
 config = common.loadConfig(args.configFilePath)
-if (args.verbose is not None): config["client"]["verbose"] = args.verbose
-if (args.logging is not None): config["client"]["logging"] = args.logging
+if (args.verbose is not None): config["global"]["echo"]["verbose"] = common.str2bool(args.verbose)
+if (args.logging is not None): config["global"]["echo"]["logging"] = common.str2bool(args.logging)
+if (args.loggingPath is not None): config["global"]["echo"]["loggingpath"] = args.loggingPath
 
 # Get an instance of the crawler
-collector = crawler.Crawler(deepcopy(config["client"]))
+CrawlerClass = getattr(crawler, config["client"]["crawler"]["class"])
+collector = CrawlerClass(deepcopy(config["client"]["crawler"]))
 
 # Connect to server
 processID = os.getpid()
@@ -42,7 +45,7 @@ if (message["command"] == "REFUSED"): sys.exit("ERROR: %s" % message["reason"])
 else: clientID = message["clientid"]
 
 # Configure echoing
-echo = common.EchoHandler(config["client"], "client%s[%s%s].log" % (clientID, socket.gethostname(), config["global"]["connection"]["port"]))
+echo = common.EchoHandler(config["client"]["echo"], "client%s[%s%s].log" % (clientID, socket.gethostname(), config["global"]["connection"]["port"]))
 
 # Execute collection
 echo.out("Connected to server with ID %s " % clientID)
@@ -51,7 +54,6 @@ while (True):
     try:
         message = server.recv()
         
-        # Stop client execution if the connection has been interrupted
         if (not message): 
             echo.out("Connection to server has been abruptly closed.", "ERROR")
             break
@@ -62,20 +64,15 @@ while (True):
             resourceID = message["resourceid"]
             filters = message["filters"]
             
-            # Try to crawl the resource
             try: 
                 crawlerResponse = collector.crawl(resourceID, filters)
-            # If a SystemExit exception has been raised, abort execution
             except SystemExit: 
                 echo.out("SystemExit exception while crawling resource %s. Execution aborted." % resourceID, "EXCEPTION")
                 server.send({"command": "EXCEPTION", "type": "error"})
                 break
-            # If another type of exception has been raised, report fail
             except: 
                 echo.out("Exception while crawling resource %s." % resourceID, "EXCEPTION")
                 server.send({"command": "EXCEPTION", "type": "fail"})
-            # If everything is ok, tell server that the collection of the resource has been finished. 
-            # If feedback is enabled, also send the new resources to server
             else:
                 resourceInfo = crawlerResponse[0]
                 extraInfo = crawlerResponse[1]

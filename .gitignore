@@ -216,9 +216,10 @@ pip-log.txt
 .mr.developer.cfg
 
 # Custom
+logs/
 *.log
 *.out
-*.xml
-*.json
-*.csv
+config.xml
+resources_model.json
+resources_model.csv
 

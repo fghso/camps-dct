@@ -1,5 +1,7 @@
 # -*- coding: iso-8859-1 -*-
 
+"""Module to store persistence handler classes."""
+
 import os
 import threading
 import tempfile
@@ -24,25 +26,28 @@ class StatusCodes():
 
 
 class BasePersistenceHandler():  
-    def __init__(self, configurationsDictionary): # Receives a copy of everything in the handler section of the XML configuration file as the parameter configurationsDictionary
-        self.config = configurationsDictionary
+    def __init__(self, configurationsDictionary): # Receive a copy of everything in the handler section of the XML configuration file as the parameter configurationsDictionary
+        self._extractConfig(configurationsDictionary)
         self.status = StatusCodes() 
+    def _extractConfig(self, configurationsDictionary):
+        self.config = configurationsDictionary
+        if ("echo" not in self.config): self.config["echo"] = {}
     def setup(self): pass # Called when a connection to a client is opened
-    def select(self): return (None, None, None) # Returns a tuple: (resource unique key, resource id, resource info dictionary)
+    def select(self): return (None, None, None) # Return a tuple: (resource unique key, resource id, resource info dictionary)
     def update(self, resourceKey, status, resourceInfo): pass
-    def insert(self, resourcesList): pass # Receives a list of tuples: [(resource id, resource info dictionary), ...]
-    def count(self): return (0, 0, 0, 0, 0, 0) # Returns a tuple: (total, succeeded, inprogress, available, failed, error)
-    def reset(self, status): return 0 # Returns the number of resources reseted
+    def insert(self, resourcesList): pass # Receive a list of tuples: [(resource id, resource info dictionary), ...]
+    def count(self): return (0, 0, 0, 0, 0, 0) # Return a tuple: (total, succeeded, inprogress, available, failed, error)
+    def reset(self, status): return 0 # Return the number of resources reseted
     def finish(self): pass # Called when a connection to a client is finished
     def shutdown(self): pass # Called when server is shut down, allowing to free shared resources
         
         
-# This class was built as basis for FilePersistenceHandler and for test purposes. 
-# It is not intended for direct use in a production enviroment
+# MemoryPersistenceHandler class was built as basis for FilePersistenceHandler and its extensions, and for test purposes. 
+# Altough it can be set in the configuration file, it is not intended for direct use in a production enviroment. Choose 
+# one of the file based handlers instead
 class MemoryPersistenceHandler(BasePersistenceHandler):
     def __init__(self, configurationsDictionary): 
         BasePersistenceHandler.__init__(self, configurationsDictionary)
-        self._extractConfig(configurationsDictionary)
         self.insertLock = threading.Lock()
         self.resources = []
         self.IDsHash = {}
@@ -54,6 +59,8 @@ class MemoryPersistenceHandler(BasePersistenceHandler):
         #self._loadTestData()
             
     def _extractConfig(self, configurationsDictionary):
+        BasePersistenceHandler._extractConfig(self, configurationsDictionary)
+    
         if ("uniqueresourceid" not in self.config): self.config["uniqueresourceid"] = False
         else: self.config["uniqueresourceid"] = common.str2bool(self.config["uniqueresourceid"])
     
@@ -132,7 +139,7 @@ class FilePersistenceHandler(MemoryPersistenceHandler):
             self.idName = idColumn
             self.statusName = statusColumn
             self.infoNames = [name for name in self.names if (name not in (self.idName, self.statusName))]
-        # This method must be overriden to extract the column names for the specific file type
+        # This method must be overriden to extract column names for a specific file type
         def _extractColNames(self, fileName): pass 
 
     class GenericFileTypeHandler():
@@ -187,23 +194,25 @@ class FilePersistenceHandler(MemoryPersistenceHandler):
     class CSVColumns(GenericFileTypeColumns):
         def _extractColNames(self, fileName):
             with open(fileName, "r") as file: 
-                reader = csv.DictReader(file, quoting = csv.QUOTE_NONE, skipinitialspace = True)
+                reader = csv.DictReader(file, quoting = csv.QUOTE_MINIMAL, quotechar = "'", skipinitialspace = True)
                 columns = reader.fieldnames
-            return columns
+            return [col.strip("\"") for col in columns]
     
     class CSVHandler(GenericFileTypeHandler):
         def _parseValue(self, value):
             if (not value): return None
             if (not value.startswith("\"")):
-                if value.lower() in ("true", "t"): return True
-                if value.lower() in ("false", "f"): return False       
-                if value.lower() in ("none", "null"): return None
+                if value.upper() in ("TRUE", "T"): return True
+                if value.upper() in ("FALSE", "F"): return False       
+                if value.upper() in ("NONE", "NULL"): return None
                 if ("." in value): return float(value)
                 return int(value)
             return value.strip("\"") 
         
         def _unparseValue(self, value):
-            if isinstance(value, basestring): return "".join(("\"", value, "\""))
+            if isinstance(value, basestring): 
+                if isinstance(value, unicode): value = value.encode("utf-8")
+                return "".join(("\"", value, "\""))
             if isinstance(value, bool): return ("T" if (value) else "F")
             return value
             
@@ -220,7 +229,7 @@ class FilePersistenceHandler(MemoryPersistenceHandler):
         
         def unparse(self, resource, columns):
             buffer = cStringIO.StringIO()
-            writer = csv.DictWriter(buffer, columns.names, quoting = csv.QUOTE_NONE, escapechar = "", quotechar = "", lineterminator = "\n", extrasaction = "ignore")
+            writer = csv.DictWriter(buffer, columns.names, quoting = csv.QUOTE_MINIMAL, quotechar = "'", lineterminator = "\n", extrasaction = "ignore")
             unparsed = {columns.idName: self._unparseValue(resource["id"])}
             if (resource["status"] != 0): unparsed[columns.statusName] = self._unparseValue(resource["status"])
             if (resource["info"]):
@@ -230,15 +239,16 @@ class FilePersistenceHandler(MemoryPersistenceHandler):
             return buffer.getvalue()
             
         def load(self, file, columns):
-            reader = csv.DictReader(file, quoting = csv.QUOTE_NONE, skipinitialspace = True)
+            reader = csv.DictReader(file, columns.names, quoting = csv.QUOTE_MINIMAL, quotechar = "'", skipinitialspace = True)
+            next(reader)
             for resource in reader:
                 yield self.parse(resource, columns)
         
         def dump(self, resources, file, columns):
-            writer = csv.DictWriter(file, columns.names, quoting = csv.QUOTE_NONE, escapechar = "", quotechar = "", lineterminator = "\n", extrasaction = "ignore")
+            writer = csv.DictWriter(file, columns.names, quoting = csv.QUOTE_MINIMAL, quotechar = "'", lineterminator = "\n", extrasaction = "ignore")
             writer.writeheader()
-            # In case of CSV, it is easier and faster to unparse the resource here, 
-            # so we can use writerow method to directly save the resource to file
+            # In case of CSV, it is easier and faster to unparse the resource here instead of using 
+            # unparse method, so we can use writerow method to directly save the resource to file
             for resource in resources:
                 row = {columns.idName: self._unparseValue(resource["id"])}
                 if (resource["status"] != 0): row[columns.statusName] = self._unparseValue(resource["status"])
@@ -249,7 +259,7 @@ class FilePersistenceHandler(MemoryPersistenceHandler):
 
     def __init__(self, configurationsDictionary): 
         MemoryPersistenceHandler.__init__(self, configurationsDictionary)
-        self.echo = common.EchoHandler()
+        self.echo = common.EchoHandler(self.config["echo"])
         self.saveLock = threading.Lock()
         self.dumpExceptionEvent = threading.Event()
         self.timer = threading.Timer(self.config["savetimedelta"], self.timelyDump)
@@ -281,7 +291,7 @@ class FilePersistenceHandler(MemoryPersistenceHandler):
     def _save(self, pk, id, status, info, changeInfo = True):
         with self.saveLock: MemoryPersistenceHandler._save(self, pk, id, status, info, changeInfo)
     
-    # Define internal file handler based on file type. Change this function to add support to other file types
+    # Define internal file handler based on file type. You can change this method to add support to other file types
     def _setFileHandler(self):
         if (self.config["filetype"] == "json"): 
             self.fileColumns = self.JSONColumns(self.config["filename"], self.config["resourceidcolumn"], self.config["statuscolumn"])
@@ -290,7 +300,7 @@ class FilePersistenceHandler(MemoryPersistenceHandler):
             self.fileColumns = self.CSVColumns(self.config["filename"], self.config["resourceidcolumn"], self.config["statuscolumn"])
             self.fileHandler = self.CSVHandler()
         else: 
-            raise TypeError("Unknown file type '%s'." % self.config["filetype"])
+            raise TypeError("Unknown file type '%s' for file '%s'." % (self.config["filetype"], self.config["filename"]))
             
     def _checkDumpException(function):
         def decoratedFunction(self, *args):
@@ -310,7 +320,7 @@ class FilePersistenceHandler(MemoryPersistenceHandler):
     def timelyDump(self):
         try: 
             self.dump()
-        except Except as error:
+        except Exception as error:
             self.dumpExceptionEvent.set()
             raise
         self.timer = threading.Timer(self.config["savetimedelta"], self.timelyDump)
@@ -346,7 +356,7 @@ class RolloverFilePersistenceHandler(FilePersistenceHandler):
     def __init__(self, configurationsDictionary): 
         self.originalConfig = deepcopy(configurationsDictionary)
         MemoryPersistenceHandler.__init__(self, configurationsDictionary)
-        self.echo = common.EchoHandler()
+        self.echo = common.EchoHandler(self.config["echo"])
         self._setFileHandler()
         self.fileHandlersList = []
         self.nextSuffixNumber = 1
@@ -416,7 +426,7 @@ class RolloverFilePersistenceHandler(FilePersistenceHandler):
             with self.insertLock:
                 handler = self.fileHandlersList[self.insertHandlerIndex]
       
-                # If size or amount thresholds were exceeded, change insert handler. If there is no more
+                # Change insert handler if size or amount thresholds were exceeded. If there is no more
                 # handlers in the list, open a new file and instantiate a new handler to take care of it
                 while ((self.insertSize >= self.config["sizethreshold"]) or 
                        (self.insertAmount >= self.config["amountthreshold"])):

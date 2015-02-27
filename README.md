@@ -1,90 +1,214 @@
 camps-crawler
 =====
 
-Os arquivos python no diretório raiz deste projeto definem o coletor genérico, denominado *camps-crawler*. Os demais diretórios contêm arquivos referentes à coleta de dados específica do Instagram, cujo projeto foi denominado *instagram-crawler*.
+A Python crawler for distributed (client-server) data collection. The code to do the actual crawling is written by the user and the script takes care of all management needed to distribute resources to be collected. 
 
-Para utilizar o coletor genérico, basta executar o servidor (`server.py`) e o cliente (`client.py`) em qualquer máquina. O servidor espera receber como entrada o caminho para um arquivo de configuração XML, que deve estar de acordo com o formato abaixo:
+### Dependencies
+
+This program was written in Python 2.7 and tested under Linux and Windows. It depends on the following external Python packages:
+
+* [xmltodict](https://github.com/martinblech/xmltodict)
+* [MySQL Connector/Python](http://dev.mysql.com/downloads/connector/python/)
+
+Quick demo
+-----
+
+To see the crawler in action, open a terminal window an go into the /demo directory. Then, type the following command:
+
+`python ../server.py config.demo.xml`
+
+This will initialiaze the server, setting it to distribute the resources stored in the file `resources.csv`. Open another terminal window, go into the /demo directory and type:
+
+`python ../manager.py config.demo.xml -s extended`
+
+The manager will show you extended status information about the data collection process, as informed by the server. Under *Global Info* section, note that there are 10 resources available to be crawled and 1 already crawled. Type the following command:
+
+`python ../client.py config.demo.xml`
+
+This will initialize a client. The client is configured to use the crawling code of the *DemoCrawler* class, wich can be found in the file `crawler.py`. The code just receives a resource ID, waits for some time and then returns some information related to the resource to the server. 
+
+Besides that, two filters are used to save new resource IDs returned by the client. These new IDs are stored in the files `new_resources.csv` and `new_resources.json`. In the case of the JSON file, a *RolloverFilePersistenceHandler* is used, configured to save a maximum of 5 resources per file. This way, at the end of demo execution you should see 3 JSON files in the folder: `new_resources.json`, `new_resources.json.1` and `new_resources.json.2`. The last two files are automatically created by the rollover handler.
+
+
+Quick setup
+-----
+
+<!-- Steps needed to run the crawler, described in a simple way. -->
+
+Architecture overview
+-----
+
+The data collection code is built as a simple client-server program. Every resource that needs to be collected is identified in the program by an ID. For example, the resources could be web pages, wich are identified by their URL, or they could be users in a social network, wich are identified by their user ID code. The server side is responsible for distribute resource IDs among clients and maintain the collection status of every resource. The clients are responsible for calling the code written by the user to do the actual crawling of the resources sent by the server. 
+
+To allow extensions and customizations, the server side of the program was designed in layers. 
+
+At the top level is the request handling code (`serverlib.py`). The server starts a new thread for each new client, encapsulating a loop where all transactions between server and client are dealt with. Managment operations (like remove clients and shut down server) are also performed by this code in response to requests made by the manager (`manager.py`).
+
+The next layer is the filters layer. Filters (`filters.py`) are segments of code that can be executed before a resource is sent to a client and/or after the resource have been crawled. Filters are not essential to the regular work of the server. They were implemented as way to easily allow pre and post-processing of resources when the scenario requires it.
+
+Finally, at the bottom level is the persistence layer (`persistence.py`), whose main purpose is to load and save information about the resources beign processed. This layer provides a common interface to persistence operations, freeing the server of the necessity to know if the resources are beign stored in a file or in a database and how to deal with the particular details of each persistence alternative. The persistence layer can also be used with filters (in fact, it could even be used in the crawler, at the client side, if the user wants to).
+
+To give an idea on how these things go togheter, one request round of the program is described bellow:
+
+1. Server starts
+2. Client starts
+3. Server receives client request for connection. It starts a new thread to handle requests for this new client
+4. Client requests a new resource ID to crawl
+5. Server talks with persistence layer to obtain a resouce ID not yet crawled
+6. Having a resource ID to send, server first applies pre-processing filters (if there are any filters to apply)
+7. Server sends the resource ID and filters results to client
+8. Client calls user code to do the actual crawling of the resource
+9. Client sends the results of the crawling process to server
+10. Server applies post-processing filters (if there are any filters to apply)
+11. Server talks with persistence layer to save the status of the crawling process for that resource
+12. Back to step 4
+
+
+Configuration options
+-----
+
+General options
 
 ```xml
 <?xml version="1.0" encoding="ISO8859-1" ?>
 <config>
-    <connection>
-        <address>server_address</address>
-        <port>port_number</port>
-        <bufsize>buffer_size</bufsize>
-    </connection>
-    <database>
-        <user>db_user</user>
-        <password>db_password</password>
-        <host>db_host</host>
-        <name>db_name</name>
-        <table>db_table_name</table>
-    </database>
+    <global>
+        <connection>
+            <address>Required</address>
+            <port>Required</port>
+        </connection>
+        <feedback>Optional (Default: False)</feedback>
+        <echo>
+            <!--- The echo section itself is optional --->
+            <logging>Optional (Default: None)</logging>
+            <loggingpath>Optional (Default: None)</loggingpath>
+            <verbose>Optional (Default: None)</verbose>
+        </echo>
+    </global>
+    <server>
+        <echo>
+            <!--- The echo section itself is optional --->
+            <logging>Optional (Default: True)</logging>
+            <loggingpath>Optional (Default: ".")</loggingpath>
+            <verbose>Optional (Default: False)</verbose>
+        </echo>
+        <loopforever>Optional (Default: False)</loopforever>
+        <persistence>
+            <handler>
+                <class>Required</class>
+                <echo>
+                    <!--- The echo section itself is optional --->
+                    <logging>Optional (Default: True)</logging>
+                    <loggingpath>Optional (Default: ".")</loggingpath>
+                    <verbose>Optional (Default: False)</verbose>
+                </echo>
+                <!--- Other handler specific configurations--->
+            </handler>
+        </persistence>
+        <filtering>
+            <!--- The filtering section itself is optional --->
+            <filter>
+                <class>Required</class>
+                <name>Optional (Default: class name)</name>
+                <parallel>Optional (Default: False)</parallel>
+                <echo>
+                    <!--- The echo section itself is optional --->
+                    <logging>Optional (Default: True)</logging>
+                    <loggingpath>Optional (Default: ".")</loggingpath>
+                    <verbose>Optional (Default: False)</verbose>
+                </echo>
+                <!--- Other filter specific configurations --->
+            </filter>
+        </filtering>
+    </server>
+    <client>
+        <echo>
+            <!--- The echo section itself is optional --->
+            <logging>Optional (Default: True)</logging>
+            <loggingpath>Optional (Default: ".")</loggingpath>
+            <verbose>Optional (Default: False)</verbose>
+        </echo>
+        <crawler>
+            <class>Required</class>
+            <echo>
+                <!--- The echo section itself is optional --->
+                <logging>Optional (Default: True)</logging>
+                <loggingpath>Optional (Default: ".")</loggingpath>
+                <verbose>Optional (Default: False)</verbose>
+            </echo>
+        </crawler>
+    </client>
 </config>
 ```
 
-Além do endereço e porta de conexão, o arquivo de configuração especifica o banco de dados MySQL que será usado para obter as informações dos recursos a serem coletados. É necessário designar a tabela onde essas informações estão armazenadas. A tabela deve possuir os seguintes campos:
+Persistence handlers options
 
-| resource_id  | status | amount | crawler | updated_at |
-| ------------ | ------ | ------ | ------- | ---------- |
-
-Abaixo está um exemplo de como essa tabela pode ser criada:
-
-```sql
-CREATE TABLE `resources` (
-    `resources_pk` int(10) unsigned NOT NULL AUTO_INCREMENT,
-    `resource_id` int(10) unsigned NOT NULL,
-    `status` tinyint(5) NOT NULL DEFAULT '0',
-    `response_code` tinyint(5) DEFAULT NULL,
-    `annotation` varchar(200) DEFAULT NULL,
-    `crawler` varchar(45) DEFAULT NULL,
-    `updated_at` timestamp NULL DEFAULT NULL ON UPDATE CURRENT_TIMESTAMP,
-    PRIMARY KEY (`resources_pk`),
-    UNIQUE KEY `resource_id_UNIQUE` (`resource_id`)
-);
+```xml
+<handler>
+    <class>FilePersistenceHandler</class>
+    <filename>Required</filename>
+    <filetype>Optional only if the file name has a proper extesion (.csv or .json)</filetype>
+    <resourceidcolumn>Required</resourceidcolumn>
+    <statuscolumn>Required</statuscolumn>
+    <uniqueresourceid>Optional (Default: False)</uniqueresourceid>
+    <onduplicateupdate>Optional (Default: False)</onduplicateupdate>
+    <savetimedelta>Required</savetimedelta>
+</handler>
 ```
 
-O servidor espera que a tabela já esteja populada com os IDs dos recursos quando o programa for iniciado, isto é, a tabela deve ser populada antes de iniciar a coleta. Os IDs podem ser qualquer informação que faça sentido para o código que efetivamente fará a coleta (podem ser, por exemplo, identificadores de usuários, hashtags, URLs, etc.). O servidor apenas gerencia qual ID está designado para cada cliente.
+```xml
+<handler>
+        <class>RolloverFilePersistenceHandler</class>
+        <filename>Required</filename>
+        <filetype>Optional only if the file name has a proper extesion (.csv or .json)</filetype>
+        <resourceidcolumn>Required</resourceidcolumn>
+        <statuscolumn>Required</statuscolumn>
+        <uniqueresourceid>Optional (Default: False)</uniqueresourceid>
+        <onduplicateupdate>Optional (Default: False)</onduplicateupdate>
+        <savetimedelta>Required</savetimedelta>
+        <sizethreshold>Optional only if amountthreshold is specified (Default: 0)</sizethreshold>
+        <amountthreshold>Optional only if sizethreshold is specified (Default: 0)</amountthreshold>
+</handler>
+```
 
-Assim como o servidor, o cliente espera receber como entrada o caminho para um arquivo de configuração XML, também de acordo com o formato descrito acima. No caso do cliente, porém, apenas as informações de conexão são necessárias. O endereço e porta informados devem ser os do servidor.
+```xml
+<handler>
+    <class>MySQLPersistenceHandler</class>
+    <user>Required</user>
+    <password>Required</password>
+    <host>Required</host>
+    <name>Required</name>
+    <table>Required</table>
+    <primarykeycolumn>Required</primarykeycolumn>
+    <resourceidcolumn>Required</resourceidcolumn>
+    <statuscolumn>Required</statuscolumn>
+    <onduplicateupdate>Optional (Default: False)</onduplicateupdate>
+</handler>
+```
 
-No mesmo diretório de execução do cliente deve existir um arquivo com o nome `crawler.py`. Esse é o arquivo que conterá o código de coleta. O arquivo deve seguir o template contido no `crawler.py` que está no repositório. 
+Filters options
+            
+```xml
+<filter>
+    <class>SaveResourcesFilter</class>
+    <name>Optional (Default: class name, i.e., SaveResourcesFilter)</name>
+    <parallel>Optional (Default: False)</parallel>
+    <handler>
+        <class>Required</class>
+        <!--- Other handler specific configurations--->
+    </handler>
+</filter>
+```
 
-
-Gerenciamento
+Management
 -----
 
-Para saber a situação atual da coleta, é possível utilizar o programa `manager.py`. Ele deve ser chamado de maneira similar ao cliente, designando-se o caminho para o arquivo de configuração XML que contém as informações de conexão com o servidor.
+<!-- Describe the manager (and other possible auxiliary scripts) -->
 
-Os seguintes argumentos opcionais estão disponíveis para esse programa:
-
-```
--h, --help                      Mostra a mensagem de ajuda e sai
--s, --status                    Obtém o status atual de todos os clientes conectados ao servidor
--r clientID, --remove clientID  Remove da lista do servidor o cliente com o ID especificado
---shutdown                      Remove todos os clientes da lista do servidor e o desliga
-```
-
-A penúltima opção (`-r clientID, --remove clientID`) permite excluir um cliente da lista do servidor informando seu ID. O cliente pode estar ativo ou inativo quando for excluído (se estiver ativo, assim que fizer um novo contato com o servidor irá receber deste uma mensagem para que termine sua execução). De maneira semelhante, no caso da última opção (`--shutdown`) o servidor notifica todos os clientes ativos para que terminem sua execução antes que o próprio servidor seja desligado.
-
-Se nenhum argumento opcional for informado, o programa, por padrão, exibe o status.
-
-
-Fluxo básico
+Customization
 -----
+### Crawler
+### Filters
+### Persistence
 
-De maneira suscinta, o fluxo de funcionamento do coletor é o seguinte: 
-
-1. Inicia-se o servidor
-2. O servidor aguarda novas conexões de clientes
-3. Inicia-se o cliente
-4. O cliente conversa com o servidor, identifica-se e, em seguida, pede um novo ID para coletar
-5. O servidor procura um ID ainda não coletado no banco de dados e o repassa ao cliente, marcando esse ID com o status *sendo coletado*
-6. O cliente recebe o ID e chama a função `crawl(resourceID)`, da classe `Crawler`, que deve estar contida no arquivo `crawler.py`
-7. A função `crawl(resourceID)` faz a coleta do recurso e retorna o status e a quantidade para o cliente
-8. O cliente repassa esses valores para o servidor
-9. O servidor marca o recurso com o valor de status recebido do cliente e armazena também o valor de quantidade informado
-10. O cliente pede um novo ID ao servidor para coletar e o fluxo retorna ao passo 5
-
-Como a ideia do coletor é proporcionar uma coleta distribuída, pode-se iniciar vários clientes simultaneamente, a partir de qualquer máquina na mesma rede do servidor.
     

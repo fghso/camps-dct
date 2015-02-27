@@ -1,4 +1,4 @@
-#!/usr/bin/python
+#!/usr/bin/python2
 # -*- coding: iso-8859-1 -*-
 
 import sys
@@ -13,6 +13,7 @@ parser.add_argument("configFilePath")
 parser.add_argument("-h", "--help", action="help", help="show this help message and exit")
 parser.add_argument("-v", "--verbose", metavar="on/off", help="enable/disable log messages on screen")
 parser.add_argument("-g", "--logging", metavar="on/off", help="enable/disable logging on file")
+parser.add_argument("-p", "--loggingPath", metavar="path", help="define path of logging file")
 args = parser.parse_args()
 
 # Add directory of the configuration file to sys.path before import serverlib, so that persistence and filter modules
@@ -23,8 +24,9 @@ import serverlib
 
 # Load configurations
 config = common.loadConfig(args.configFilePath)
-if (args.verbose is not None): config["server"]["verbose"] = args.verbose
-if (args.logging is not None): config["server"]["logging"] = args.logging
+if (args.verbose is not None): config["global"]["echo"]["verbose"] = common.str2bool(args.verbose)
+if (args.logging is not None): config["global"]["echo"]["logging"] = common.str2bool(args.logging)
+if (args.loggingPath is not None): config["global"]["echo"]["loggingpath"] = args.loggingPath
 
 # Run server
 server = serverlib.ThreadedTCPServer(config)

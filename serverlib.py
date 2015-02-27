@@ -22,10 +22,10 @@ from copy import deepcopy
 #    collection start time and last GET_ID request time] 
 clientsInfo = {} 
 
-# Store a reference for the thread running the client and an event to interrupt its execution
+# Stores a reference for the thread running the client and an event to interrupt its execution
 clientsThreads = {}
 
-# Define the next ID to give to a new client
+# Defines the next ID to give to a new client
 nextFreeID = 1
 
 # Stores the number of active connections
@@ -38,7 +38,7 @@ crawlerAggregatedTimes = {0: 0.0}
 numTimingMeasures = {0: long(0)}
 numCrawlingMeasures = {0: long(0)}
 
-# Define synchronization objects for critical regions of the code
+# Synchronization objects for critical regions of the code
 removeClientLock = threading.Lock()
 shutdownLock = threading.Lock()
 finishedCondition = threading.Condition()
@@ -56,7 +56,7 @@ class ServerHandler(SocketServer.BaseRequestHandler):
         self.clientID = 0
         self.cleanUpThread = False
     
-        # Get network handler instance
+        # Try to accept the new client connection
         self.client = common.NetworkHandler(self.request)
         message = self.client.recv()
     
@@ -73,7 +73,6 @@ class ServerHandler(SocketServer.BaseRequestHandler):
             for filter in self.server.sequentialFilters: filter.setup()
             
             if (message["type"] == "client"):
-                # Set client ID and other informations
                 clientAddress = self.client.getaddress()
                 clientPid = message["processid"]
                 self.clientID = nextFreeID
@@ -383,7 +382,7 @@ class ThreadedTCPServer(SocketServer.ThreadingMixIn, SocketServer.TCPServer):
         self.config = configurationsDictionary
         
         # Configure echoing
-        self.echo = common.EchoHandler(self.config["server"], "server[%s%s].log" % (socket.gethostname(), self.config["global"]["connection"]["port"]))
+        self.echo = common.EchoHandler(self.config["server"]["echo"], "server[%s%s].log" % (socket.gethostname(), self.config["global"]["connection"]["port"]))
         
         # Get persistence handler instance
         self.echo.out("Initializing persistence handler...")
