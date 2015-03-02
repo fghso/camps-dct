@@ -5,7 +5,7 @@
 More than one class can be written here, but only one (that specified in the configuration file) will be used by the client to instantiate a crawler object whose crawl method will by called to do the collection of the resource received. 
 
 Classes available to use:
-    BaseCrawler: Abstract class. All crawlers should inherit from it.
+    BaseCrawler: Abstract class. All crawlers should inherit from it or from other class that does this.
     DemoCrawler(BaseCrawler): Example crawler, just for demonstration.
 
 """
@@ -19,7 +19,7 @@ class BaseCrawler:
     def __init__(self, configurationsDictionary):
         """Constructor.  
         
-        Upon initialization the crawler object receives a copy of everything in the crawler section of the XML configuration file as the parameter configurationsDictionary. The default constructor calls an internal method to take care of configurations extraction. 
+        Upon initialization the crawler object receives everything in the crawler section of the XML configuration file as the parameter configurationsDictionary. 
         
         """
         self._extractConfig(configurationsDictionary)
@@ -27,7 +27,7 @@ class BaseCrawler:
     def _extractConfig(self, configurationsDictionary):
         """Extract and store configurations.
         
-        The configurations dictionary is stored in the instance variable config. If some configuration needs any kind of pre-processing, this is done here. Extend this method if you need to pre-process custom configuration options.
+        If some configuration needs any kind of pre-processing, this is done here. Extend this method if you need to pre-process custom configuration options.
         
         """
         self.config = configurationsDictionary
@@ -44,7 +44,7 @@ class BaseCrawler:
                 the same order that they appears in the configuration file. Parallel filters come next in undetermined order.
             
         Returns:   
-            The return value must be a tuple of the format: (resourceInfo, extraInfo, newResources). Any element of the tuple can be None, depending on what the user desires.
+            A tuple in the format (resourceInfo, extraInfo, newResources). Any element of the tuple can be None, depending on what the user desires.
 
             resourceInfo (dict): Resource information dictionary. This information is user defined and must be understood 
                 by the persistence handler used. 
@@ -54,7 +54,7 @@ class BaseCrawler:
                 is described by a tuple of the format tuple(resourceID, dict(resourceInfo)), where the first element is the resource ID (whose type is defined by the user) and the second element is a dictionary containing resource information (in a format understood by the persistence handler used).
                 
         """
-        pass
+        return (None, None, None)
         
 
 class DemoCrawler(BaseCrawler):

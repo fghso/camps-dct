@@ -33,7 +33,7 @@ if (args.loggingPath is not None): config["global"]["echo"]["loggingpath"] = arg
 
 # Get an instance of the crawler
 CrawlerClass = getattr(crawler, config["client"]["crawler"]["class"])
-collector = CrawlerClass(deepcopy(config["client"]["crawler"]))
+collector = CrawlerClass(config["client"]["crawler"])
 
 # Connect to server
 processID = os.getpid()

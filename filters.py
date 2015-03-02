@@ -5,7 +5,7 @@
 The filters are sequentially applied in the same order in wich they were specified in the configuration file, unless they were explicitly set as parallel.
 
 Classes available to use:
-    BaseFilter: Abstract class. All filters should inherit from it.
+    BaseFilter: Abstract class. All filters should inherit from it or from other class that does this..
     SaveResourcesFilter(BaseCrawler): Post-processing only filter to save resources sent by clients.
 
 """
@@ -17,7 +17,7 @@ class BaseFilter():
     def __init__(self, configurationsDictionary): 
         """Constructor.  
         
-        Each filter receives everything in its corresponding filter section of the XML configuration file as the parameter configurationsDictionary. The default constructor calls an internal method to take care of configurations extraction. 
+        Each filter receives everything in its corresponding filter section of the XML configuration file as the parameter configurationsDictionary.
         
         """
         self._extractConfig(configurationsDictionary)
@@ -25,7 +25,7 @@ class BaseFilter():
     def _extractConfig(self, configurationsDictionary):
         """Extract and store configurations.
         
-        The configurations dictionary is stored in the instance variable config. If some configuration needs any kind of pre-processing, this is done here. Extend this method if you need to pre-process custom configuration options.
+        If some configuration needs any kind of pre-processing, this is done here. Extend this method if you need to pre-process custom configuration options.
         
         """
         self.config = configurationsDictionary
@@ -73,9 +73,6 @@ class BaseFilter():
                 sequential filters, the original information received from crawler is stored in extraInfo["original"], so it 
                 is available at any time). This information is not used by the server.
         
-        Returns: 
-            No return value is expected.
-    
         """
         pass
         
@@ -102,7 +99,6 @@ class SaveResourcesFilter(BaseFilter):
     This post-processing olny filter makes use of the persistence infrastructure to save resources sent by clients. The location where the resources are stored can be specified in the XML configuration file just setting up the persistence handler to be used.
 
     """
-    
     def __init__(self, configurationsDictionary): 
         BaseFilter.__init__(self, configurationsDictionary)
         PersistenceHandlerClass = getattr(persistence, self.config["handler"]["class"])

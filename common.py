@@ -46,8 +46,8 @@ class EchoHandler():
             configurationsDictionary (dict): Holds values for the 3 configuration options supported: verbose (bool), 
                 logging (bool) and loggingpath (str).
             loggingFileName (str): Name of the file used to save logging messages.
-            defaultLoggingLevel (str): Level to set for the root logger. See Python's logging module documentation 
-                for details.
+            defaultLoggingLevel (str): Level at wich the root logger must be set. Supports any of the level names defined in 
+                Python's logging module (see logging module documentation for details).
         
         """
         self._extractConfig(configurationsDictionary)
@@ -67,7 +67,11 @@ class EchoHandler():
     def _extractConfig(self, configurationsDictionary):
         """Extract and store configurations.
         
+        The configurations are extracted from configurationsDictionary and stored in separate instance variables. Each configuration has a default value, so it is possible to use EchoHandler without specifying any of them. The values of globalConfig are also checked here and, if set, override the values given in configurationsDictionary, as well as default values. 
         
+        Args: 
+            configurationsDictionary (dict): Holds values for the 3 configuration options supported: verbose (bool), 
+                logging (bool) and loggingpath (str).
         
         """
         self.verbose = False
@@ -87,6 +91,16 @@ class EchoHandler():
         if (EchoHandler.globalConfig["loggingpath"] is not None): self.loggingPath = EchoHandler.globalConfig["loggingpath"]
         
     def out(self, message, loggingLevel = "", mode = "both"):
+        """Emit logging and/or printing messages.
+        
+        Args: 
+            message (str): The message to be logged and/or printed.
+            loggingLevel (str): Level to use when logging the message. Supports any of the level names defined in 
+                Python's logging module (see logging module documentation for details). If the level is bellow the default, no message is emited. If it is not specified, the default level is used.
+            mode (str): Control wether the message should be only logged, only printed or both. The corresponding 
+                accepted values are: "logonly", "printonly" and "both". This gives a fine-grained control, at the code level, over the message output destination.
+        
+        """
         if (self.logging) and (mode != "printonly"): 
             if (loggingLevel == "EXCEPTION"): self.logger.exception(message)
             else: self.logger.log(getattr(logging, loggingLevel, self.logger.getEffectiveLevel()), message)
