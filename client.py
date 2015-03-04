@@ -14,7 +14,7 @@ from copy import deepcopy
 parser = argparse.ArgumentParser(add_help=False)
 parser.add_argument("configFilePath")
 parser.add_argument("-h", "--help", action="help", help="show this help message and exit")
-parser.add_argument("-v", "--verbose", metavar="on/off", help="enable/disable log messages on screen")
+parser.add_argument("-v", "--verbose", metavar="on/off", help="enable/disable information messages on screen")
 parser.add_argument("-g", "--logging", metavar="on/off", help="enable/disable logging on file")
 parser.add_argument("-p", "--loggingPath", metavar="path", help="define path of logging file")
 args = parser.parse_args()
