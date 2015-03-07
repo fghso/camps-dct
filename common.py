@@ -4,12 +4,6 @@
 
 Functions and classes are put here when they are meant to be reused in different parts of the program. Some of them were built just for internal use, but others (listed bellow) can also be in user code as well (for example, in crawler code).
 
-Class available to use:
-    EchoHandler(): Handler to manage logging and printing of messages.
-    
-Function available to use: 
-    str2bool(stringToConvert): Auxiliary function to convert strings to booleans.
-
 """
 
 import sys
@@ -30,12 +24,10 @@ class EchoHandler():
     
     Provides a unified and common infrastructure for information output in different parts of the program, besides abstracting low level details about output operations. 
     
-    Attributes:
-        globalConfig (dict): Mandatory configuration values. If a value for an option here is None, the handler respects the 
-            instance local configuration value for that option. Otherwise, the value specified here overrides any local value.
-    
     """
+    
     globalConfig = {"verbose": None, "logging": None, "loggingpath": None}
+    """Mandatory configuration values. If a value for an option here is None, the handler respects the instance local configuration value for that option. Otherwise, the value specified here overrides any local value."""
 
     def __init__(self, configurationsDictionary = {}, loggingFileName = "", defaultLoggingLevel = "INFO"):
         """Constructor.
@@ -43,11 +35,9 @@ class EchoHandler():
         The root logger configuration is done here using logging.basicConfig method. This means that loggingFileName and  defaultLoggingLevel options are defined by the first module in an import hierarchy that instantiate an EchoHandler object, as subsequent calls to logging.basicConfig have no effect (See Python's logging module documentation for details). So, for example, when running client.py it is the first module to instantiate an EchoHandler object. client.py imports crawler.py module, but as crawler.py is the second module in the hierarchy, it will use the root logger configuration defined in client.py, despite any local settings of loggingFileName and defaultLoggingLevel used.
         
         Args:
-            configurationsDictionary (dict): Holds values for the 3 configuration options supported: verbose (bool), 
-                logging (bool) and loggingpath (str).
-            loggingFileName (str): Name of the file used to save logging messages.
-            defaultLoggingLevel (str): Level at wich the root logger must be set. Supports any of the level names defined in 
-                Python's logging module (see logging module documentation for details).
+            * *configurationsDictionary* (dict): Holds values for the 3 configuration options supported: verbose (bool), logging (bool) and loggingpath (str).
+            * *loggingFileName* (str): Name of the file used to save logging messages.
+            * *defaultLoggingLevel* (str): Level at wich the root logger must be set. Supports any of the level names defined in Python's logging module (see logging module documentation for details).
         
         """
         self._extractConfig(configurationsDictionary)
@@ -70,8 +60,7 @@ class EchoHandler():
         The configurations are extracted from configurationsDictionary and stored in separate instance variables. Each configuration has a default value, so it is possible to use EchoHandler without specifying any of them. The values of globalConfig are also checked here and, if set, override the values given in configurationsDictionary, as well as default values. 
         
         Args: 
-            configurationsDictionary (dict): Holds values for the 3 configuration options supported: verbose (bool), 
-                logging (bool) and loggingpath (str).
+            * *configurationsDictionary* (dict): Holds values for the 3 configuration options supported: verbose (bool), logging (bool) and loggingpath (str).
         
         """
         self.verbose = False
@@ -94,11 +83,9 @@ class EchoHandler():
         """Emit logging and/or printing messages.
         
         Args: 
-            message (str): The message to be logged and/or printed.
-            loggingLevel (str): Level to use when logging the message. Supports any of the level names defined in 
-                Python's logging module (see logging module documentation for details). If the level is bellow the default, no message is emited. If it is not specified, the default level is used.
-            mode (str): Control wether the message should be only logged, only printed or both. The corresponding 
-                accepted values are: "logonly", "printonly" and "both". This gives a fine-grained control, at the code level, over the message output destination.
+            * *message* (str): The message to be logged and/or printed.
+            * *loggingLevel* (str): Level to use when logging the message. Supports any of the level names defined in Python's logging module (see logging module documentation for details). If the level is bellow the default, no message is emited. If it is not specified, the default level is used.
+            * *mode* (str): Control wether the message should be only logged, only printed or both. The corresponding accepted values are: "logonly", "printonly" and "both". This gives a fine-grained control, at the code level, over the message output destination.
         
         """
         if (self.logging) and (mode != "printonly"): 
@@ -174,9 +161,7 @@ def str2bool(stringToConvert):
     """Convert strings to booleans.
     
     Args:
-        stringToConvert (str): 
-            The following string values are acepted as True: "true", "t", "yes", "y", "on", "1". 
-            The following string values are acepted as False: "false", "f", "no", "n", "off", "0".
+        * *stringToConvert* (str): The following string values are acepted as True: "true", "t", "yes", "y", "on", "1". The following string values are acepted as False: "false", "f", "no", "n", "off", "0".
        
     Returns:
         True or False, depending on input value.

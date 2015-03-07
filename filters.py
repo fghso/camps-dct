@@ -4,16 +4,14 @@
 
 The filters are sequentially applied in the same order in wich they were specified in the configuration file, unless they were explicitly set as parallel.
 
-Classes available to use:
-    BaseFilter: Abstract class. All filters should inherit from it or from other class that does this..
-    SaveResourcesFilter(BaseCrawler): Post-processing only filter to save resources sent by clients.
-
 """
 
 import persistence
 
 
 class BaseFilter(): 
+    """Abstract class. All filters should inherit from it or from other class that does this.."""
+
     def __init__(self, configurationsDictionary): 
         """Constructor.  
         
@@ -45,9 +43,8 @@ class BaseFilter():
         """Process resource information before it is sent to a client.
         
         Args:
-            resourceID (user defined type): ID of the resource to be collected, sent by the server.
-            extraInfo (dict): Reference to a dictionary that can be used to pass information among sequential filters. 
-                It is not sent to clients and its value will always be None if the filter is executed in parallel.
+            * *resourceID* (user defined type): ID of the resource to be collected, sent by the server.
+            * *extraInfo* (dict): Reference to a dictionary that can be used to pass information among sequential filters. It is not sent to clients and its value will always be None if the filter is executed in parallel.
             
         Returns:   
             A dictionary containing the desired filter information to be sent to clients.
@@ -60,18 +57,10 @@ class BaseFilter():
         """Process information sent by clients after a resources has been crawled.
         
         Args:
-            resourceID (user defined type): ID of the crawled resource.
-            resourceInfo (dict): Resource information dictionary sent by client. Sequential filters receive this parameter  
-                as reference, so they can alter its value, but parallel filters receive just a copy of it. The server will 
-                store the final value of resourceInfo as it is after all filters were called back.
-            newResources (list): List of new resources sent by client to be stored by the server. Sequential filters receive 
-                this parameter as reference, so they can alter its value, but parallel filters receive just a copy 
-                of it. The server will store the final value of newResources as it is after all filters were called back.
-            extraInfo (dict): Dictionary that contains information sent by client to filters. Sequential filters receive 
-                this parameter as reference, so they can alter its value, but parallel filters receive just a copy of it. 
-                As in apply method, extraInfo can also be used to pass information among sequential filters (in the case of 
-                sequential filters, the original information received from crawler is stored in extraInfo["original"], so it 
-                is available at any time). This information is not used by the server.
+            * *resourceID* (user defined type): ID of the crawled resource.
+            * *resourceInfo* (dict): Resource information dictionary sent by client. Sequential filters receive this parameter as reference, so they can alter its value, but parallel filters receive just a copy of it. The server will store the final value of resourceInfo as it is after all filters were called back.
+            * *newResources* (list): List of new resources sent by client to be stored by the server. Sequential filters receive this parameter as reference, so they can alter its value, but parallel filters receive just a copy of it. The server will store the final value of newResources as it is after all filters were called back.
+            * *extraInfo* (dict): Dictionary that contains information sent by client to filters. Sequential filters receive this parameter as reference, so they can alter its value, but parallel filters receive just a copy of it. As in apply method, extraInfo can also be used to pass information among sequential filters (in the case of sequential filters, the original information received from crawler is stored in extraInfo["original"], so it is available at any time). This information is not used by the server.
         
         """
         pass

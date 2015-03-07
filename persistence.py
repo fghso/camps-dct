@@ -4,15 +4,6 @@
 
 Persistence handlers take care of all implementation details related to resource storage. They all expose a common interface (defined in BasePersistenceHandler) through wich the server (and/or filters/crawlers) can load, save and perform other operations over resources independently from where and how the resources are actually stored. At any point in time, the collection status of each resource must be one of those defined in the struct-like-class StatusCodes.
 
-Classes available to use:
-    StatusCodes: A struct-like-class to hold constants for resources status codes.
-    BasePersistenceHandler: Abstract class. All persistence handlers should inherit from it or from other 
-        class that does this.
-    FilePersistenceHandler(MemoryPersistenceHandler): Store and retrieve resources to/from a file.
-    RolloverFilePersistenceHandler(FilePersistenceHandler): Store and retrieve resources to/from multiple files respecting 
-        limits of file size and/or number of resources per file.
-    MySQLPersistenceHandler(BasePersistenceHandler): Store and retrieve resources to/from a MySQL database.
-
 """
 
 import os
@@ -43,7 +34,9 @@ class StatusCodes():
     ERROR      = -2
 
 
-class BasePersistenceHandler():  
+class BasePersistenceHandler(): 
+    """Abstract class. All persistence handlers should inherit from it or from other class that does this."""
+ 
     def __init__(self, configurationsDictionary): 
         """Constructor.  
         
@@ -76,10 +69,9 @@ class BasePersistenceHandler():
         Returns: 
             A tuple in the format (resourceKey, resourceID, resourceInfo).
             
-            resourceKey (user defined type): Value that uniquely identify the resource internally. It works like a primary 
-                key in relational databases and makes possible the existence of resources with the same ID, if needed.
-            resourceID (user defined type): Resource ID to be sent to a client.
-            resourceInfo (dict): Other information related to the resource, if there is any.
+            * *resourceKey* (user defined type): Value that uniquely identify the resource internally. It works like a primary key in relational databases and makes possible the existence of resources with the same ID, if needed.
+            * *resourceID* (user defined type): Resource ID to be sent to a client.
+            * *resourceInfo* (dict): Other information related to the resource, if there is any.
         
         """
         return (None, None, None)
@@ -88,9 +80,9 @@ class BasePersistenceHandler():
         """Update the specified resource, setting its status and information data to the ones given.
         
         Args: 
-            resourceKey (user defined type): Value that uniquely identify the resource internally.
-            status (StatusCodes): New status of the resource.
-            resourceInfo (dict): Other information related to the resource, if there is any.
+            * *resourceKey* (user defined type): Value that uniquely identify the resource internally.
+            * *status* (StatusCodes): New status of the resource.
+            * *resourceInfo* (dict): Other information related to the resource, if there is any.
             
         """
         pass
@@ -99,8 +91,7 @@ class BasePersistenceHandler():
         """Insert new resources into the final location where resources are persisted.
         
         Args: 
-            resourcesList (list): List of tuples containing all new resources to be inserted. Each resource is defined 
-                by a tuple in the format (resourceID, resourceInfo).
+            * *resourcesList* (list): List of tuples containing all new resources to be inserted. Each resource is defined by a tuple in the format (resourceID, resourceInfo).
             
         """
         pass
@@ -118,7 +109,7 @@ class BasePersistenceHandler():
         """Turn all resources in the specified status category into AVAILABLE.
         
         Args:
-            status (StatusCodes): Status of the resources to be reseted.
+            * *status* (StatusCodes): Status of the resources to be reseted.
         
         Returns:
             Number of resources reseted.
@@ -266,8 +257,8 @@ class FilePersistenceHandler(MemoryPersistenceHandler):
             """Transform resource from file format to internal representation format.
             
             Args: 
-                resource (file specific type): Resource given in file format.
-                columns (GenericFileTypeColumns subclass): Object holding column names information.
+                * *resource* (file specific type): Resource given in file format.
+                * *columns* (GenericFileTypeColumns subclass): Object holding column names information.
             
             Returns:
                 A resource in internal representation format.
@@ -279,8 +270,8 @@ class FilePersistenceHandler(MemoryPersistenceHandler):
             """Transform resource from internal representation format to file format.
             
             Args: 
-                resource (dict): Resource given in internal representation format.
-                columns (GenericFileTypeColumns subclass): Object holding column names information.
+                * *resource* (dict): Resource given in internal representation format.
+                * *columns* (GenericFileTypeColumns subclass): Object holding column names information.
             
             Returns:
                 A resource in file format.
@@ -292,8 +283,8 @@ class FilePersistenceHandler(MemoryPersistenceHandler):
             """Load resources in file format and yield them in internal representation format.
             
             Args: 
-                file (file object): File object bounded to the physical file where resources are stored.
-                columns (GenericFileTypeColumns subclass): Object holding column names information.
+                * *file* (file object): File object bounded to the physical file where resources are stored.
+                * *columns* (GenericFileTypeColumns subclass): Object holding column names information.
                 
             Yields:
                 A resource in internal representation format.
@@ -305,9 +296,9 @@ class FilePersistenceHandler(MemoryPersistenceHandler):
             """Save resources in internal representation format to file.
             
             Args: 
-                resources (list): List of resources in internal representation format.
-                file (file object): File object bounded to the physical file where resources will be stored.
-                columns (GenericFileTypeColumns subclass): Object holding column names information.
+                * *resources* (list): List of resources in internal representation format.
+                * *file* (file object): File object bounded to the physical file where resources will be stored.
+                * *columns* (GenericFileTypeColumns subclass): Object holding column names information.
 
             """        
             pass
@@ -441,6 +432,7 @@ class FilePersistenceHandler(MemoryPersistenceHandler):
                 self.resources.append(resource)
         except: raise
         finally: file.close()
+        print self.resources
         self.timer.start()
         
     def _extractConfig(self, configurationsDictionary):
@@ -637,7 +629,7 @@ class RolloverFilePersistenceHandler(FilePersistenceHandler):
         
         
 class MySQLPersistenceHandler(BasePersistenceHandler):
-     """Store and retrieve resources to/from a MySQL database. 
+    """Store and retrieve resources to/from a MySQL database. 
     
     The table must already exists in the database and contain at least three columns: a primary key column, a resource ID column and a status column. This handler uses MySQL Connector/Python to interact with a MySQL database. See the Connector/Python online documentation for details.
     

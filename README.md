@@ -6,4 +6,4 @@ A Python program for distributed (client-server) data collection. The code to do
 Documentation:
 
 * [General information and usage instructions](https://github.com/fghso/camps-dct/wiki)
-* [Code extracted documentation]()
+* [Modules documentation](http://fghso.github.io/camps-dct/)
