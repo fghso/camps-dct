@@ -219,7 +219,3 @@ pip-log.txt
 logs/
 *.log
 *.out
-config.xml
-resources_model.json
-resources_model.csv
-
