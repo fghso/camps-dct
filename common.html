@@ -1,0 +1,193 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>common Module &mdash; CAMPS Data Collection Tool 1.0 documentation</title>
+    
+    <link rel="stylesheet" href="_static/default.css" type="text/css" />
+    <link rel="stylesheet" href="_static/pygments.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    './',
+        VERSION:     '1.0',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '.html',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="_static/jquery.js"></script>
+    <script type="text/javascript" src="_static/underscore.js"></script>
+    <script type="text/javascript" src="_static/doctools.js"></script>
+    <link rel="shortcut icon" href="_static/camps_dct.ico"/>
+    <link rel="top" title="CAMPS Data Collection Tool 1.0 documentation" href="index.html" />
+    <link rel="up" title="Customizable Modules" href="customizable-modules.html" />
+    <link rel="prev" title="persistence Module" href="persistence.html" /> 
+  </head>
+  <body>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="genindex.html" title="General Index"
+             accesskey="I">index</a></li>
+        <li class="right" >
+          <a href="py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li class="right" >
+          <a href="persistence.html" title="persistence Module"
+             accesskey="P">previous</a> |</li>
+        <li><a href="index.html">CAMPS Data Collection Tool 1.0 documentation</a> &raquo;</li>
+          <li><a href="customizable-modules.html" accesskey="U">Customizable Modules</a> &raquo;</li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body">
+            
+  <div class="section" id="module-common">
+<span id="common-module"></span><h1>common Module<a class="headerlink" href="#module-common" title="Permalink to this headline">¶</a></h1>
+<p>Module to store shared code.</p>
+<p>Functions and classes are put here when they are meant to be reused in different parts of the program. Some of them were built just for internal use, but others (listed bellow) can also be incorporated in user code as well (for example, in the <a class="reference internal" href="crawler.html#crawler.DemoCrawler" title="crawler.DemoCrawler"><tt class="xref py py-class docutils literal"><span class="pre">crawler</span></tt></a> code).</p>
+<dl class="class">
+<dt id="common.EchoHandler">
+<em class="property">class </em><tt class="descclassname">common.</tt><tt class="descname">EchoHandler</tt><big>(</big><em>configurationsDictionary={}</em>, <em>loggingFileName=''</em>, <em>defaultLoggingLevel='INFO'</em><big>)</big><a class="headerlink" href="#common.EchoHandler" title="Permalink to this definition">¶</a></dt>
+<dd><p>Manage logging and printing of messages.</p>
+<p>Provides a unified and common infrastructure for information output in different parts of the program, besides abstracting low level details about output operations.</p>
+<dl class="method">
+<dt id="common.EchoHandler.__init__">
+<tt class="descname">__init__</tt><big>(</big><em>configurationsDictionary={}</em>, <em>loggingFileName=''</em>, <em>defaultLoggingLevel='INFO'</em><big>)</big><a class="headerlink" href="#common.EchoHandler.__init__" title="Permalink to this definition">¶</a></dt>
+<dd><p>Constructor.</p>
+<p>Root logger configuration is done here using <a class="reference external" href="https://docs.python.org/2/library/logging.html#logging.basicConfig" title="(in Python v2.7)"><tt class="xref py py-func docutils literal"><span class="pre">logging.basicConfig()</span></tt></a>. This means that <em>loggingFileName</em> and  <em>defaultLoggingLevel</em> parameters are defined by the first module in an import hierarchy that instantiate an <a class="reference internal" href="#common.EchoHandler" title="common.EchoHandler"><tt class="xref py py-class docutils literal"><span class="pre">EchoHandler</span></tt></a> object, as subsequent calls to <a class="reference external" href="https://docs.python.org/2/library/logging.html#logging.basicConfig" title="(in Python v2.7)"><tt class="xref py py-func docutils literal"><span class="pre">logging.basicConfig()</span></tt></a> have no effect. So, for example, when running the <a class="reference internal" href="client.html"><em>client</em></a>, it is the first module to instantiate an <a class="reference internal" href="#common.EchoHandler" title="common.EchoHandler"><tt class="xref py py-class docutils literal"><span class="pre">EchoHandler</span></tt></a> object. <a class="reference internal" href="client.html"><em>client</em></a> imports the <a class="reference internal" href="crawler.html#module-crawler" title="crawler"><tt class="xref py py-mod docutils literal"><span class="pre">crawler</span></tt></a> module, but as <a class="reference internal" href="crawler.html#module-crawler" title="crawler"><tt class="xref py py-mod docutils literal"><span class="pre">crawler</span></tt></a> is the second module in the hierarchy, it will use the root logger configuration defined in <a class="reference internal" href="client.html"><em>client</em></a>, despite any local settings of <em>loggingFileName</em> and <em>defaultLoggingLevel</em> used.</p>
+<dl class="docutils">
+<dt>Args:</dt>
+<dd><ul class="first last simple">
+<li><em>configurationsDictionary</em> (dict): Holds values for the three configuration options supported: verbose (bool), logging (bool) and loggingpath (str).</li>
+<li><em>loggingFileName</em> (str): Name of the file used to save logging messages.</li>
+<li><em>defaultLoggingLevel</em> (str): Level at wich the root logger must be set. Supports any of the <a class="reference external" href="https://docs.python.org/2/library/logging.html#levels" title="(in Python v2.7)"><em class="xref std std-ref">level names</em></a> defined in Python&#8217;s built-in logging module.</li>
+</ul>
+</dd>
+</dl>
+<div class="admonition seealso">
+<p class="first admonition-title">See also</p>
+<p class="last">Python&#8217;s built-in <a class="reference external" href="https://docs.python.org/2/library/logging.html#module-logging" title="(in Python v2.7)"><tt class="xref py py-mod docutils literal"><span class="pre">logging</span></tt></a> module documentation.</p>
+</div>
+</dd></dl>
+
+<dl class="method">
+<dt id="common.EchoHandler._extractConfig">
+<tt class="descname">_extractConfig</tt><big>(</big><em>configurationsDictionary</em><big>)</big><a class="headerlink" href="#common.EchoHandler._extractConfig" title="Permalink to this definition">¶</a></dt>
+<dd><p>Extract and store configurations.</p>
+<p>The configurations are extracted from <em>configurationsDictionary</em> and stored in separate instance variables. Each configuration has a default value, so it is possible to use <a class="reference internal" href="#common.EchoHandler" title="common.EchoHandler"><tt class="xref py py-class docutils literal"><span class="pre">EchoHandler</span></tt></a> without specifying any of them. The values of <tt class="xref py py-attr docutils literal"><span class="pre">globalConfig</span></tt> are also checked here and, if set, override the values given in <em>configurationsDictionary</em>, as well as default values.</p>
+<dl class="docutils">
+<dt>Args: </dt>
+<dd><ul class="first last simple">
+<li><em>configurationsDictionary</em> (dict): Holds values for the three configuration options supported: verbose (bool), logging (bool) and loggingpath (str).</li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="method">
+<dt id="common.EchoHandler.out">
+<tt class="descname">out</tt><big>(</big><em>message</em>, <em>loggingLevel=''</em>, <em>mode='both'</em><big>)</big><a class="headerlink" href="#common.EchoHandler.out" title="Permalink to this definition">¶</a></dt>
+<dd><p>Log and/or print a message.</p>
+<dl class="docutils">
+<dt>Args: </dt>
+<dd><ul class="first last simple">
+<li><em>message</em> (str): The message to be logged and/or printed.</li>
+<li><em>loggingLevel</em> (str): Level to use when logging the message. Supports any of the <a class="reference external" href="https://docs.python.org/2/library/logging.html#levels" title="(in Python v2.7)"><em class="xref std std-ref">level names</em></a> defined in Python&#8217;s built-in logging module. If the level is bellow the default, no message is emited. If it is not specified, the default level is used.</li>
+<li><em>mode</em> (str): Control wether the message should be only logged, only printed or both. The corresponding accepted values are: &#8220;logonly&#8221;, &#8220;printonly&#8221; and &#8220;both&#8221;. This gives a fine-grained control, at the code level, over the message output destination.</li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="function">
+<dt id="common.str2bool">
+<tt class="descclassname">common.</tt><tt class="descname">str2bool</tt><big>(</big><em>stringToConvert</em><big>)</big><a class="headerlink" href="#common.str2bool" title="Permalink to this definition">¶</a></dt>
+<dd><p>Convert a string to a boolean.</p>
+<dl class="docutils">
+<dt>Args:</dt>
+<dd><ul class="first last simple">
+<li><em>stringToConvert</em> (str): The following string values are acepted as <tt class="docutils literal"><span class="pre">True</span></tt>: &#8220;true&#8221;, &#8220;t&#8221;, &#8220;yes&#8221;, &#8220;y&#8221;, &#8220;on&#8221;, &#8220;1&#8221;. The following string values are acepted as <tt class="docutils literal"><span class="pre">False</span></tt>: &#8220;false&#8221;, &#8220;f&#8221;, &#8220;no&#8221;, &#8220;n&#8221;, &#8220;off&#8221;, &#8220;0&#8221;.</li>
+</ul>
+</dd>
+<dt>Returns:</dt>
+<dd><tt class="docutils literal"><span class="pre">True</span></tt> or <tt class="docutils literal"><span class="pre">False</span></tt>, depending on input value.</dd>
+<dt>Raises:</dt>
+<dd><a class="reference external" href="https://docs.python.org/2/library/exceptions.html#exceptions.TypeError" title="(in Python v2.7)"><tt class="xref py py-exc docutils literal"><span class="pre">TypeError</span></tt></a>: If input string is not one of the accepted values.</dd>
+</dl>
+</dd></dl>
+
+</div>
+
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar">
+        <div class="sphinxsidebarwrapper">
+            <p class="logo"><a href="index.html">
+              <img class="logo" src="_static/camps_dct_inv.png" alt="Logo"/>
+            </a></p>
+<h3><a href="index.html">Table Of Contents</a></h3>
+<ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="index.html">Home</a></li>
+<li class="toctree-l1"><a class="reference internal" href="core-modules.html">Core Modules</a></li>
+<li class="toctree-l1 current"><a class="reference internal" href="customizable-modules.html">Customizable Modules</a><ul class="current">
+<li class="toctree-l2"><a class="reference internal" href="crawler.html">crawler</a></li>
+<li class="toctree-l2"><a class="reference internal" href="filters.html">filters</a></li>
+<li class="toctree-l2"><a class="reference internal" href="persistence.html">persistence</a></li>
+<li class="toctree-l2 current"><a class="current reference internal" href="">common</a></li>
+</ul>
+</li>
+</ul>
+
+<div id="searchbox" style="display: none">
+  <h3>Quick search</h3>
+    <form class="search" action="search.html" method="get">
+      <input type="text" name="q" />
+      <input type="submit" value="Go" />
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+    <p class="searchtip" style="font-size: 90%">
+    Enter search terms or a module, class or function name.
+    </p>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="genindex.html" title="General Index"
+             >index</a></li>
+        <li class="right" >
+          <a href="py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li class="right" >
+          <a href="persistence.html" title="persistence Module"
+             >previous</a> |</li>
+        <li><a href="index.html">CAMPS Data Collection Tool 1.0 documentation</a> &raquo;</li>
+          <li><a href="customizable-modules.html" >Customizable Modules</a> &raquo;</li> 
+      </ul>
+    </div>
+    <div class="footer">
+        &copy; Copyright 2015, fghso.
+      Created using <a href="http://sphinx-doc.org/">Sphinx</a> 1.2.3.
+    </div>
+  </body>
+</html>

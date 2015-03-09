@@ -1,0 +1,208 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>filters Module &mdash; CAMPS Data Collection Tool 1.0 documentation</title>
+    
+    <link rel="stylesheet" href="_static/default.css" type="text/css" />
+    <link rel="stylesheet" href="_static/pygments.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    './',
+        VERSION:     '1.0',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '.html',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="_static/jquery.js"></script>
+    <script type="text/javascript" src="_static/underscore.js"></script>
+    <script type="text/javascript" src="_static/doctools.js"></script>
+    <link rel="shortcut icon" href="_static/camps_dct.ico"/>
+    <link rel="top" title="CAMPS Data Collection Tool 1.0 documentation" href="index.html" />
+    <link rel="up" title="Customizable Modules" href="customizable-modules.html" />
+    <link rel="next" title="persistence Module" href="persistence.html" />
+    <link rel="prev" title="crawler Module" href="crawler.html" /> 
+  </head>
+  <body>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="genindex.html" title="General Index"
+             accesskey="I">index</a></li>
+        <li class="right" >
+          <a href="py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li class="right" >
+          <a href="persistence.html" title="persistence Module"
+             accesskey="N">next</a> |</li>
+        <li class="right" >
+          <a href="crawler.html" title="crawler Module"
+             accesskey="P">previous</a> |</li>
+        <li><a href="index.html">CAMPS Data Collection Tool 1.0 documentation</a> &raquo;</li>
+          <li><a href="customizable-modules.html" accesskey="U">Customizable Modules</a> &raquo;</li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body">
+            
+  <div class="section" id="module-filters">
+<span id="filters-module"></span><h1>filters Module<a class="headerlink" href="#module-filters" title="Permalink to this headline">¶</a></h1>
+<p>Module to store filter classes.</p>
+<p>The filters are sequentially applied in the same order in wich they were specified in the configuration file, unless they were explicitly set as parallel.</p>
+<dl class="class">
+<dt id="filters.BaseFilter">
+<em class="property">class </em><tt class="descclassname">filters.</tt><tt class="descname">BaseFilter</tt><big>(</big><em>configurationsDictionary</em><big>)</big><a class="headerlink" href="#filters.BaseFilter" title="Permalink to this definition">¶</a></dt>
+<dd><p>Abstract class. All filters should inherit from it or from other class that inherits.</p>
+<dl class="method">
+<dt id="filters.BaseFilter.__init__">
+<tt class="descname">__init__</tt><big>(</big><em>configurationsDictionary</em><big>)</big><a class="headerlink" href="#filters.BaseFilter.__init__" title="Permalink to this definition">¶</a></dt>
+<dd><p>Constructor.</p>
+<p>Each filter receives everything in its corresponding filter section of the XML configuration file as the parameter <em>configurationsDictionary</em>.</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="filters.BaseFilter._extractConfig">
+<tt class="descname">_extractConfig</tt><big>(</big><em>configurationsDictionary</em><big>)</big><a class="headerlink" href="#filters.BaseFilter._extractConfig" title="Permalink to this definition">¶</a></dt>
+<dd><p>Extract and store configurations.</p>
+<p>If some configuration needs any kind of pre-processing, this is done here. Extend this method if you need to pre-process custom configuration options.</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="filters.BaseFilter.apply">
+<tt class="descname">apply</tt><big>(</big><em>resourceID</em>, <em>resourceInfo</em>, <em>extraInfo</em><big>)</big><a class="headerlink" href="#filters.BaseFilter.apply" title="Permalink to this definition">¶</a></dt>
+<dd><p>Process resource information before it is sent to a client.</p>
+<dl class="docutils">
+<dt>Args:</dt>
+<dd><ul class="first last simple">
+<li><em>resourceID</em> (user defined type): ID of the resource to be collected, sent by the server.</li>
+<li><em>extraInfo</em> (dict): Reference to a dictionary that can be used to pass information among sequential filters. It is not sent to clients and its value will always be <tt class="docutils literal"><span class="pre">None</span></tt> if the filter is executed in parallel.</li>
+</ul>
+</dd>
+<dt>Returns:   </dt>
+<dd>A dictionary containing the desired filter information to be sent to clients.</dd>
+</dl>
+</dd></dl>
+
+<dl class="method">
+<dt id="filters.BaseFilter.callback">
+<tt class="descname">callback</tt><big>(</big><em>resourceID</em>, <em>resourceInfo</em>, <em>newResources</em>, <em>extraInfo</em><big>)</big><a class="headerlink" href="#filters.BaseFilter.callback" title="Permalink to this definition">¶</a></dt>
+<dd><p>Process information sent by clients after a resource has been crawled.</p>
+<dl class="docutils">
+<dt>Args:</dt>
+<dd><ul class="first last simple">
+<li><em>resourceID</em> (user defined type): ID of the crawled resource.</li>
+<li><em>resourceInfo</em> (dict): Resource information dictionary sent by client. Sequential filters receive this parameter as reference, so they can alter its value, but parallel filters receive just a copy of it. The server will store the final value of <em>resourceInfo</em> as it is after all filters were called back.</li>
+<li><em>newResources</em> (list): List of new resources sent by client to be stored by the server. Sequential filters receive this parameter as reference, so they can alter its value, but parallel filters receive just a copy of it. The server will store the final value of <em>newResources</em> as it is after all filters were called back.</li>
+<li><em>extraInfo</em> (dict): Dictionary that contains information sent by client to filters. Sequential filters receive this parameter as reference, so they can alter its value, but parallel filters receive just a copy of it. As in <a class="reference internal" href="#filters.BaseFilter.apply" title="filters.BaseFilter.apply"><tt class="xref py py-meth docutils literal"><span class="pre">apply()</span></tt></a>, <em>extraInfo</em> can also be used to pass information among sequential filters (in the case of sequential filters, the original information received from crawler is stored in <em>extraInfo[&#8220;original&#8221;]</em>, so it is available at any time). This information is not used by the server.</li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="method">
+<dt id="filters.BaseFilter.finish">
+<tt class="descname">finish</tt><big>(</big><big>)</big><a class="headerlink" href="#filters.BaseFilter.finish" title="Permalink to this definition">¶</a></dt>
+<dd><p>Execute per client finalization procedures.</p>
+<p>This method is called every time a connection to a client is closed, allowing to execute finalization code on a per client basis. It is the counterpart of <a class="reference internal" href="#filters.BaseFilter.setup" title="filters.BaseFilter.setup"><tt class="xref py py-meth docutils literal"><span class="pre">setup()</span></tt></a>.</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="filters.BaseFilter.setup">
+<tt class="descname">setup</tt><big>(</big><big>)</big><a class="headerlink" href="#filters.BaseFilter.setup" title="Permalink to this definition">¶</a></dt>
+<dd><p>Execute per client initialization procedures.</p>
+<p>This method is called every time a connection to a new client is opened, allowing to execute initialization code on a per client basis (wich differs from <a class="reference internal" href="#filters.BaseFilter.__init__" title="filters.BaseFilter.__init__"><tt class="xref py py-meth docutils literal"><span class="pre">__init__()</span></tt></a> that is called when the server instantiate the filter, i.e., <a class="reference internal" href="#filters.BaseFilter.__init__" title="filters.BaseFilter.__init__"><tt class="xref py py-meth docutils literal"><span class="pre">__init__()</span></tt></a> is called just one time for the whole period of execution of the program).</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="filters.BaseFilter.shutdown">
+<tt class="descname">shutdown</tt><big>(</big><big>)</big><a class="headerlink" href="#filters.BaseFilter.shutdown" title="Permalink to this definition">¶</a></dt>
+<dd><p>Execute program finalization procedures (similar to a destructor).</p>
+<p>This method is called when the server is shut down, allowing to execute finalization code in a global manner. It is intended to be the counterpart of <a class="reference internal" href="#filters.BaseFilter.__init__" title="filters.BaseFilter.__init__"><tt class="xref py py-meth docutils literal"><span class="pre">__init__()</span></tt></a>, but differs from <a class="reference external" href="https://docs.python.org/2/reference/datamodel.html#object.__del__" title="(in Python v2.7)"><tt class="xref py py-meth docutils literal"><span class="pre">__del__()</span></tt></a> in that it is not bounded to the live of the filter object itself, but rather to the span of execution time of the server.</p>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="class">
+<dt id="filters.SaveResourcesFilter">
+<em class="property">class </em><tt class="descclassname">filters.</tt><tt class="descname">SaveResourcesFilter</tt><big>(</big><em>configurationsDictionary</em><big>)</big><a class="headerlink" href="#filters.SaveResourcesFilter" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <a class="reference internal" href="#filters.BaseFilter" title="filters.BaseFilter"><tt class="xref py py-class docutils literal"><span class="pre">filters.BaseFilter</span></tt></a></p>
+<p>Save resources sent by clients in a user specified location.</p>
+<p>This post-processing olny filter makes use of the persistence infrastructure to save resources sent by clients. The location where the resources are stored can be specified in the XML configuration file just setting up the persistence handler to be used.</p>
+</dd></dl>
+
+</div>
+
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar">
+        <div class="sphinxsidebarwrapper">
+            <p class="logo"><a href="index.html">
+              <img class="logo" src="_static/camps_dct_inv.png" alt="Logo"/>
+            </a></p>
+<h3><a href="index.html">Table Of Contents</a></h3>
+<ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="index.html">Home</a></li>
+<li class="toctree-l1"><a class="reference internal" href="core-modules.html">Core Modules</a></li>
+<li class="toctree-l1 current"><a class="reference internal" href="customizable-modules.html">Customizable Modules</a><ul class="current">
+<li class="toctree-l2"><a class="reference internal" href="crawler.html">crawler</a></li>
+<li class="toctree-l2 current"><a class="current reference internal" href="">filters</a></li>
+<li class="toctree-l2"><a class="reference internal" href="persistence.html">persistence</a></li>
+<li class="toctree-l2"><a class="reference internal" href="common.html">common</a></li>
+</ul>
+</li>
+</ul>
+
+<div id="searchbox" style="display: none">
+  <h3>Quick search</h3>
+    <form class="search" action="search.html" method="get">
+      <input type="text" name="q" />
+      <input type="submit" value="Go" />
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+    <p class="searchtip" style="font-size: 90%">
+    Enter search terms or a module, class or function name.
+    </p>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="genindex.html" title="General Index"
+             >index</a></li>
+        <li class="right" >
+          <a href="py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li class="right" >
+          <a href="persistence.html" title="persistence Module"
+             >next</a> |</li>
+        <li class="right" >
+          <a href="crawler.html" title="crawler Module"
+             >previous</a> |</li>
+        <li><a href="index.html">CAMPS Data Collection Tool 1.0 documentation</a> &raquo;</li>
+          <li><a href="customizable-modules.html" >Customizable Modules</a> &raquo;</li> 
+      </ul>
+    </div>
+    <div class="footer">
+        &copy; Copyright 2015, fghso.
+      Created using <a href="http://sphinx-doc.org/">Sphinx</a> 1.2.3.
+    </div>
+  </body>
+</html>

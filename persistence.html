@@ -1,0 +1,402 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>persistence Module &mdash; CAMPS Data Collection Tool 1.0 documentation</title>
+    
+    <link rel="stylesheet" href="_static/default.css" type="text/css" />
+    <link rel="stylesheet" href="_static/pygments.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    './',
+        VERSION:     '1.0',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '.html',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="_static/jquery.js"></script>
+    <script type="text/javascript" src="_static/underscore.js"></script>
+    <script type="text/javascript" src="_static/doctools.js"></script>
+    <link rel="shortcut icon" href="_static/camps_dct.ico"/>
+    <link rel="top" title="CAMPS Data Collection Tool 1.0 documentation" href="index.html" />
+    <link rel="up" title="Customizable Modules" href="customizable-modules.html" />
+    <link rel="next" title="common Module" href="common.html" />
+    <link rel="prev" title="filters Module" href="filters.html" /> 
+  </head>
+  <body>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="genindex.html" title="General Index"
+             accesskey="I">index</a></li>
+        <li class="right" >
+          <a href="py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li class="right" >
+          <a href="common.html" title="common Module"
+             accesskey="N">next</a> |</li>
+        <li class="right" >
+          <a href="filters.html" title="filters Module"
+             accesskey="P">previous</a> |</li>
+        <li><a href="index.html">CAMPS Data Collection Tool 1.0 documentation</a> &raquo;</li>
+          <li><a href="customizable-modules.html" accesskey="U">Customizable Modules</a> &raquo;</li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body">
+            
+  <div class="section" id="module-persistence">
+<span id="persistence-module"></span><h1>persistence Module<a class="headerlink" href="#module-persistence" title="Permalink to this headline">¶</a></h1>
+<p>Module to store persistence handler classes.</p>
+<p>Persistence handlers take care of all implementation details related to resource storage. They all expose a common interface (defined in <a class="reference internal" href="#persistence.BasePersistenceHandler" title="persistence.BasePersistenceHandler"><tt class="xref py py-class docutils literal"><span class="pre">BasePersistenceHandler</span></tt></a>) through wich the server (and/or filters/crawlers) can load, save and perform other operations over resources independently from where and how the resources are actually stored. At any point in time, the collection status of each resource must be one of those defined in the struct-like-class <a class="reference internal" href="#persistence.StatusCodes" title="persistence.StatusCodes"><tt class="xref py py-class docutils literal"><span class="pre">StatusCodes</span></tt></a>.</p>
+<dl class="class">
+<dt id="persistence.BasePersistenceHandler">
+<em class="property">class </em><tt class="descclassname">persistence.</tt><tt class="descname">BasePersistenceHandler</tt><big>(</big><em>configurationsDictionary</em><big>)</big><a class="headerlink" href="#persistence.BasePersistenceHandler" title="Permalink to this definition">¶</a></dt>
+<dd><p>Abstract class. All persistence handlers should inherit from it or from other class that inherits.</p>
+<dl class="method">
+<dt id="persistence.BasePersistenceHandler.__init__">
+<tt class="descname">__init__</tt><big>(</big><em>configurationsDictionary</em><big>)</big><a class="headerlink" href="#persistence.BasePersistenceHandler.__init__" title="Permalink to this definition">¶</a></dt>
+<dd><p>Constructor.</p>
+<p>Each persistence handler receives everything in its corresponding handler section of the XML configuration file as the parameter configurationsDictionary.</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="persistence.BasePersistenceHandler._extractConfig">
+<tt class="descname">_extractConfig</tt><big>(</big><em>configurationsDictionary</em><big>)</big><a class="headerlink" href="#persistence.BasePersistenceHandler._extractConfig" title="Permalink to this definition">¶</a></dt>
+<dd><p>Extract and store configurations.</p>
+<p>If some configuration needs any kind of pre-processing, this is done here. Extend this method if you need to pre-process custom configuration options.</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="persistence.BasePersistenceHandler.count">
+<tt class="descname">count</tt><big>(</big><big>)</big><a class="headerlink" href="#persistence.BasePersistenceHandler.count" title="Permalink to this definition">¶</a></dt>
+<dd><p>Count the number of resources in each status category.</p>
+<dl class="docutils">
+<dt>Returns: </dt>
+<dd>A tuple in the format (<em>total</em>, <em>succeeded</em>, <em>inprogress</em>, <em>available</em>, <em>failed</em>, <em>error</em>) where all fields are integers representing the number of resources with the respective status code.</dd>
+</dl>
+</dd></dl>
+
+<dl class="method">
+<dt id="persistence.BasePersistenceHandler.finish">
+<tt class="descname">finish</tt><big>(</big><big>)</big><a class="headerlink" href="#persistence.BasePersistenceHandler.finish" title="Permalink to this definition">¶</a></dt>
+<dd><p>Execute per client finalization procedures.</p>
+<p>This method is called every time a connection to a client is closed, allowing to execute finalization code on a per client basis. It is the counterpart of <a class="reference internal" href="#persistence.BasePersistenceHandler.setup" title="persistence.BasePersistenceHandler.setup"><tt class="xref py py-meth docutils literal"><span class="pre">setup()</span></tt></a>.</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="persistence.BasePersistenceHandler.insert">
+<tt class="descname">insert</tt><big>(</big><em>resourcesList</em><big>)</big><a class="headerlink" href="#persistence.BasePersistenceHandler.insert" title="Permalink to this definition">¶</a></dt>
+<dd><p>Insert new resources into the final location where resources are persisted.</p>
+<dl class="docutils">
+<dt>Args: </dt>
+<dd><ul class="first last simple">
+<li><em>resourcesList</em> (list): List of tuples containing all new resources to be inserted. Each resource is defined by a tuple in the format (<em>resourceID</em>, <em>resourceInfo</em>).</li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="method">
+<dt id="persistence.BasePersistenceHandler.reset">
+<tt class="descname">reset</tt><big>(</big><em>status</em><big>)</big><a class="headerlink" href="#persistence.BasePersistenceHandler.reset" title="Permalink to this definition">¶</a></dt>
+<dd><p>Change to <tt class="docutils literal"><span class="pre">AVAILABLE</span></tt> all resources with the status code given.</p>
+<dl class="docutils">
+<dt>Args:</dt>
+<dd><ul class="first last simple">
+<li><em>status</em> (<a class="reference internal" href="#persistence.StatusCodes" title="persistence.StatusCodes"><tt class="xref py py-class docutils literal"><span class="pre">StatusCodes</span></tt></a>): Status of the resources to be reseted.</li>
+</ul>
+</dd>
+<dt>Returns:</dt>
+<dd>Number of resources reseted.</dd>
+</dl>
+</dd></dl>
+
+<dl class="method">
+<dt id="persistence.BasePersistenceHandler.select">
+<tt class="descname">select</tt><big>(</big><big>)</big><a class="headerlink" href="#persistence.BasePersistenceHandler.select" title="Permalink to this definition">¶</a></dt>
+<dd><p>Retrive an <tt class="docutils literal"><span class="pre">AVAILABLE</span></tt> resource.</p>
+<dl class="docutils">
+<dt>Returns: </dt>
+<dd><p class="first">A tuple in the format (<em>resourceKey</em>, <em>resourceID</em>, <em>resourceInfo</em>).</p>
+<ul class="last simple">
+<li><em>resourceKey</em> (user defined type): Value that uniquely identify the resource internally. It works like a primary key in relational databases and makes possible the existence of resources with the same ID, if needed.</li>
+<li><em>resourceID</em> (user defined type): Resource ID to be sent to a client.</li>
+<li><em>resourceInfo</em> (dict): Other information related to the resource, if there is any.</li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="method">
+<dt id="persistence.BasePersistenceHandler.setup">
+<tt class="descname">setup</tt><big>(</big><big>)</big><a class="headerlink" href="#persistence.BasePersistenceHandler.setup" title="Permalink to this definition">¶</a></dt>
+<dd><p>Execute per client initialization procedures.</p>
+<p>This method is called every time a connection to a new client is opened, allowing to execute initialization code on a per client basis (wich differs from <a class="reference internal" href="#persistence.BasePersistenceHandler.__init__" title="persistence.BasePersistenceHandler.__init__"><tt class="xref py py-meth docutils literal"><span class="pre">__init__()</span></tt></a> that is called when the server instantiate the persistence handler, i.e., <a class="reference internal" href="#persistence.BasePersistenceHandler.__init__" title="persistence.BasePersistenceHandler.__init__"><tt class="xref py py-meth docutils literal"><span class="pre">__init__()</span></tt></a> is called just one time for the whole period of execution of the program).</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="persistence.BasePersistenceHandler.shutdown">
+<tt class="descname">shutdown</tt><big>(</big><big>)</big><a class="headerlink" href="#persistence.BasePersistenceHandler.shutdown" title="Permalink to this definition">¶</a></dt>
+<dd><p>Execute program finalization procedures (similar to a destructor).</p>
+<p>This method is called when the server is shut down, allowing to execute finalization code in a global manner. It is intended to be the counterpart of <a class="reference internal" href="#persistence.BasePersistenceHandler.__init__" title="persistence.BasePersistenceHandler.__init__"><tt class="xref py py-meth docutils literal"><span class="pre">__init__()</span></tt></a>, but differs from <a class="reference external" href="https://docs.python.org/2/reference/datamodel.html#object.__del__" title="(in Python v2.7)"><tt class="xref py py-meth docutils literal"><span class="pre">__del__()</span></tt></a> in that it is not bounded to the live of the persistence handler object itself, but rather to the span of execution time of the server.</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="persistence.BasePersistenceHandler.update">
+<tt class="descname">update</tt><big>(</big><em>resourceKey</em>, <em>status</em>, <em>resourceInfo</em><big>)</big><a class="headerlink" href="#persistence.BasePersistenceHandler.update" title="Permalink to this definition">¶</a></dt>
+<dd><p>Update the specified resource, setting its status and information data to the ones given.</p>
+<dl class="docutils">
+<dt>Args: </dt>
+<dd><ul class="first last simple">
+<li><em>resourceKey</em> (user defined type): Value that uniquely identify the resource internally.</li>
+<li><em>status</em> (<a class="reference internal" href="#persistence.StatusCodes" title="persistence.StatusCodes"><tt class="xref py py-class docutils literal"><span class="pre">StatusCodes</span></tt></a>): New status of the resource.</li>
+<li><em>resourceInfo</em> (dict): Other information related to the resource, if there is any.</li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="class">
+<dt id="persistence.FilePersistenceHandler">
+<em class="property">class </em><tt class="descclassname">persistence.</tt><tt class="descname">FilePersistenceHandler</tt><big>(</big><em>configurationsDictionary</em><big>)</big><a class="headerlink" href="#persistence.FilePersistenceHandler" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <tt class="xref py py-class docutils literal"><span class="pre">persistence.MemoryPersistenceHandler</span></tt></p>
+<p>Load and dump resources from/to a file.</p>
+<p>All resources in the file are loaded into memory before the server operations begin. So, this handler is recomended for small to medium size datasets that can be completely fitted in machine&#8217;s memory. For larger datasets, consider using another persistence handler. Another option for large datasets is to divide the resources in more than one file, collecting the resources of one file at a time.</p>
+<p>The default version of this handler supports CSV and JSON files. It is possible to add support to other file types by subclassing <a class="reference internal" href="#persistence.FilePersistenceHandler.BaseFileColumns" title="persistence.FilePersistenceHandler.BaseFileColumns"><tt class="xref py py-class docutils literal"><span class="pre">BaseFileColumns</span></tt></a> and <a class="reference internal" href="#persistence.FilePersistenceHandler.BaseFileHandler" title="persistence.FilePersistenceHandler.BaseFileHandler"><tt class="xref py py-class docutils literal"><span class="pre">BaseFileHandler</span></tt></a>. The new file type must also be included in <tt class="xref py py-attr docutils literal"><span class="pre">supportedFileTypes</span></tt>.</p>
+<dl class="class">
+<dt id="persistence.FilePersistenceHandler.BaseFileColumns">
+<em class="property">class </em><tt class="descname">BaseFileColumns</tt><big>(</big><em>fileName</em>, <em>idColumn</em>, <em>statusColumn</em><big>)</big><a class="headerlink" href="#persistence.FilePersistenceHandler.BaseFileColumns" title="Permalink to this definition">¶</a></dt>
+<dd><p>Hold column names of data in the file, allowing fast access to names of ID, status and info columns.</p>
+<dl class="method">
+<dt id="persistence.FilePersistenceHandler.BaseFileColumns._extractColNames">
+<tt class="descname">_extractColNames</tt><big>(</big><em>fileName</em><big>)</big><a class="headerlink" href="#persistence.FilePersistenceHandler.BaseFileColumns._extractColNames" title="Permalink to this definition">¶</a></dt>
+<dd><p>Extract column names from the file.</p>
+<p>Must be overriden, as column names extraction depends on the file type.</p>
+<dl class="docutils">
+<dt>Returns: </dt>
+<dd>A list of all column names in the file.</dd>
+</dl>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="class">
+<dt id="persistence.FilePersistenceHandler.BaseFileHandler">
+<em class="property">class </em><tt class="descclassname">FilePersistenceHandler.</tt><tt class="descname">BaseFileHandler</tt><a class="headerlink" href="#persistence.FilePersistenceHandler.BaseFileHandler" title="Permalink to this definition">¶</a></dt>
+<dd><p>Handle low level details about persistence in a specific file type.</p>
+<p>Each resource loaded from a file is stored in memory in a dictionary in the format <tt class="docutils literal"><span class="pre">{&quot;id&quot;:</span> <span class="pre">X,</span> <span class="pre">&quot;status&quot;:</span> <span class="pre">X,</span> <span class="pre">&quot;info&quot;:</span> <span class="pre">{...}}</span></tt>, which is the resource internal representation format. This handler is responsible for translating resources in the internal representation format to the format used in a specific file type and vice-versa.</p>
+<dl class="method">
+<dt id="persistence.FilePersistenceHandler.BaseFileHandler.dump">
+<tt class="descname">dump</tt><big>(</big><em>resources</em>, <em>file</em>, <em>columns</em><big>)</big><a class="headerlink" href="#persistence.FilePersistenceHandler.BaseFileHandler.dump" title="Permalink to this definition">¶</a></dt>
+<dd><p>Save resources in internal representation format to file format.</p>
+<dl class="docutils">
+<dt>Args: </dt>
+<dd><ul class="first last simple">
+<li><em>resources</em> (list): List of resources in internal representation format.</li>
+<li><em>file</em> (<a class="reference external" href="https://docs.python.org/2/library/stdtypes.html#bltin-file-objects" title="(in Python v2.7)"><em class="xref std std-ref">file object</em></a>): File object bounded to the physical file where resources will be stored.</li>
+<li><em>columns</em> (<tt class="xref py py-class docutils literal"><span class="pre">BaseFileColumns</span></tt> subclass): Object holding column names.</li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="method">
+<dt id="persistence.FilePersistenceHandler.BaseFileHandler.load">
+<tt class="descname">load</tt><big>(</big><em>file</em>, <em>columns</em><big>)</big><a class="headerlink" href="#persistence.FilePersistenceHandler.BaseFileHandler.load" title="Permalink to this definition">¶</a></dt>
+<dd><p>Load resources in file format and yield them in internal representation format.</p>
+<dl class="docutils">
+<dt>Args: </dt>
+<dd><ul class="first last simple">
+<li><em>file</em> (<a class="reference external" href="https://docs.python.org/2/library/stdtypes.html#bltin-file-objects" title="(in Python v2.7)"><em class="xref std std-ref">file object</em></a>): File object bounded to the physical file where resources are stored.</li>
+<li><em>columns</em> (<tt class="xref py py-class docutils literal"><span class="pre">BaseFileColumns</span></tt> subclass): Object holding column names.</li>
+</ul>
+</dd>
+<dt>Yields:</dt>
+<dd>A resource in internal representation format.</dd>
+</dl>
+</dd></dl>
+
+<dl class="method">
+<dt id="persistence.FilePersistenceHandler.BaseFileHandler.parse">
+<tt class="descname">parse</tt><big>(</big><em>resource</em>, <em>columns</em><big>)</big><a class="headerlink" href="#persistence.FilePersistenceHandler.BaseFileHandler.parse" title="Permalink to this definition">¶</a></dt>
+<dd><p>Transform resource from file format to internal representation format.</p>
+<dl class="docutils">
+<dt>Args: </dt>
+<dd><ul class="first last simple">
+<li><em>resource</em> (file specific type): Resource given in file format.</li>
+<li><em>columns</em> (<tt class="xref py py-class docutils literal"><span class="pre">BaseFileColumns</span></tt> subclass): Object holding column names.</li>
+</ul>
+</dd>
+<dt>Returns:</dt>
+<dd>A resource in internal representation format.</dd>
+</dl>
+</dd></dl>
+
+<dl class="method">
+<dt id="persistence.FilePersistenceHandler.BaseFileHandler.unparse">
+<tt class="descname">unparse</tt><big>(</big><em>resource</em>, <em>columns</em><big>)</big><a class="headerlink" href="#persistence.FilePersistenceHandler.BaseFileHandler.unparse" title="Permalink to this definition">¶</a></dt>
+<dd><p>Transform resource from internal representation format to file format.</p>
+<dl class="docutils">
+<dt>Args: </dt>
+<dd><ul class="first last simple">
+<li><em>resource</em> (dict): Resource given in internal representation format.</li>
+<li><em>columns</em> (<tt class="xref py py-class docutils literal"><span class="pre">BaseFileColumns</span></tt> subclass): Object holding column names.</li>
+</ul>
+</dd>
+<dt>Returns:</dt>
+<dd>A resource in file format.</dd>
+</dl>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="class">
+<dt id="persistence.FilePersistenceHandler.CSVColumns">
+<em class="property">class </em><tt class="descclassname">FilePersistenceHandler.</tt><tt class="descname">CSVColumns</tt><big>(</big><em>fileName</em>, <em>idColumn</em>, <em>statusColumn</em><big>)</big><a class="headerlink" href="#persistence.FilePersistenceHandler.CSVColumns" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <tt class="xref py py-class docutils literal"><span class="pre">persistence.BaseFileColumns</span></tt></p>
+<p>Hold column names of data in CSV files, allowing fast access to names of ID, status and info columns.</p>
+</dd></dl>
+
+<dl class="class">
+<dt id="persistence.FilePersistenceHandler.CSVHandler">
+<em class="property">class </em><tt class="descclassname">FilePersistenceHandler.</tt><tt class="descname">CSVHandler</tt><a class="headerlink" href="#persistence.FilePersistenceHandler.CSVHandler" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <tt class="xref py py-class docutils literal"><span class="pre">persistence.BaseFileHandler</span></tt></p>
+<p>Handle low level details about persistence in CSV files.</p>
+<div class="admonition note">
+<p class="first admonition-title">Note</p>
+<p class="last">This class and <a class="reference internal" href="#persistence.FilePersistenceHandler.CSVColumns" title="persistence.FilePersistenceHandler.CSVColumns"><tt class="xref py py-class docutils literal"><span class="pre">FilePersistenceHandler.CSVColumns</span></tt></a> uses Python&#8217;s built-in <a class="reference external" href="https://docs.python.org/2/library/csv.html#module-csv" title="(in Python v2.7)"><tt class="docutils literal"><span class="pre">csv</span></tt></a> module internally.</p>
+</div>
+</dd></dl>
+
+<dl class="class">
+<dt id="persistence.FilePersistenceHandler.JSONColumns">
+<em class="property">class </em><tt class="descclassname">FilePersistenceHandler.</tt><tt class="descname">JSONColumns</tt><big>(</big><em>fileName</em>, <em>idColumn</em>, <em>statusColumn</em><big>)</big><a class="headerlink" href="#persistence.FilePersistenceHandler.JSONColumns" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <tt class="xref py py-class docutils literal"><span class="pre">persistence.BaseFileColumns</span></tt></p>
+<p>Hold column names of data in JSON files, allowing fast access to names of ID, status and info columns.</p>
+</dd></dl>
+
+<dl class="class">
+<dt id="persistence.FilePersistenceHandler.JSONHandler">
+<em class="property">class </em><tt class="descclassname">FilePersistenceHandler.</tt><tt class="descname">JSONHandler</tt><a class="headerlink" href="#persistence.FilePersistenceHandler.JSONHandler" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <tt class="xref py py-class docutils literal"><span class="pre">persistence.BaseFileHandler</span></tt></p>
+<p>Handle low level details about persistence in JSON files.</p>
+<div class="admonition note">
+<p class="first admonition-title">Note</p>
+<p class="last">This class and <a class="reference internal" href="#persistence.FilePersistenceHandler.JSONColumns" title="persistence.FilePersistenceHandler.JSONColumns"><tt class="xref py py-class docutils literal"><span class="pre">FilePersistenceHandler.JSONColumns</span></tt></a> uses Python&#8217;s built-in <a class="reference external" href="https://docs.python.org/2/library/json.html#module-json" title="(in Python v2.7)"><tt class="docutils literal"><span class="pre">json</span></tt></a> module internally.</p>
+</div>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="class">
+<dt id="persistence.MySQLPersistenceHandler">
+<em class="property">class </em><tt class="descclassname">persistence.</tt><tt class="descname">MySQLPersistenceHandler</tt><big>(</big><em>configurationsDictionary</em><big>)</big><a class="headerlink" href="#persistence.MySQLPersistenceHandler" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <a class="reference internal" href="#persistence.BasePersistenceHandler" title="persistence.BasePersistenceHandler"><tt class="xref py py-class docutils literal"><span class="pre">persistence.BasePersistenceHandler</span></tt></a></p>
+<p>Store and retrieve resources to/from a MySQL database.</p>
+<p>The table must already exists in the database and contain at least three columns: a primary key column, a resource ID column and a status column.</p>
+<div class="admonition note">
+<p class="first admonition-title">Note</p>
+<p class="last">This handler uses <a class="reference external" href="http://dev.mysql.com/doc/connector-python/en/index.html">MySQL Connector/Python</a> to interact with MySQL databases.</p>
+</div>
+</dd></dl>
+
+<dl class="class">
+<dt id="persistence.RolloverFilePersistenceHandler">
+<em class="property">class </em><tt class="descclassname">persistence.</tt><tt class="descname">RolloverFilePersistenceHandler</tt><big>(</big><em>configurationsDictionary</em><big>)</big><a class="headerlink" href="#persistence.RolloverFilePersistenceHandler" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <a class="reference internal" href="#persistence.FilePersistenceHandler" title="persistence.FilePersistenceHandler"><tt class="xref py py-class docutils literal"><span class="pre">persistence.FilePersistenceHandler</span></tt></a></p>
+<p>Load and dump resources from/to files respecting limits of file size and/or number of resources per file.</p>
+<p>This handler uses multiple instances of <a class="reference internal" href="#persistence.FilePersistenceHandler" title="persistence.FilePersistenceHandler"><tt class="xref py py-class docutils literal"><span class="pre">FilePersistenceHandler</span></tt></a> to allow insertion of new resources respecting limits specified by the user. It is also capable of reading and updating resources from multiple files.</p>
+<p>The rollover handler leaves the low level details of persistence for the file handlers attached to each file, taking care of the coordination necessary to maintain consistency between them and also of the verification of limits established.</p>
+<p>When inserting new resources, every time the file size limit and/or number of resources per file limit is reached rollover handler opens a new file and assigns a new instance of <a class="reference internal" href="#persistence.FilePersistenceHandler" title="persistence.FilePersistenceHandler"><tt class="xref py py-class docutils literal"><span class="pre">FilePersistenceHandler</span></tt></a> to handle it. All resources, however, are maintained in memory. So, as in the case of <a class="reference internal" href="#persistence.FilePersistenceHandler" title="persistence.FilePersistenceHandler"><tt class="xref py py-class docutils literal"><span class="pre">FilePersistenceHandler</span></tt></a>, this handler is not well suited for large datasets that cannot be completely fitted in memory.</p>
+<div class="admonition note">
+<p class="first admonition-title">Note</p>
+<p class="last">This handler was inspired by Python&#8217;s <a class="reference external" href="https://docs.python.org/2/library/logging.handlers.html#logging.handlers.RotatingFileHandler" title="(in Python v2.7)"><tt class="docutils literal"><span class="pre">logging.handlers.RotatingFileHandler</span></tt></a> class.</p>
+</div>
+</dd></dl>
+
+<dl class="class">
+<dt id="persistence.StatusCodes">
+<em class="property">class </em><tt class="descclassname">persistence.</tt><tt class="descname">StatusCodes</tt><a class="headerlink" href="#persistence.StatusCodes" title="Permalink to this definition">¶</a></dt>
+<dd><p>A struct-like-class to hold constants for resources status codes.</p>
+<p>The numeric value of each code can be modified to match the one used in the final location where the resources are persisted. The name of each code (<tt class="docutils literal"><span class="pre">SUCCEEDED</span></tt>, <tt class="docutils literal"><span class="pre">INPROGRESS</span></tt>, <tt class="docutils literal"><span class="pre">AVAILABLE</span></tt>, <tt class="docutils literal"><span class="pre">FAILED</span></tt>, <tt class="docutils literal"><span class="pre">ERROR</span></tt>) must not be modified.</p>
+</dd></dl>
+
+</div>
+
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar">
+        <div class="sphinxsidebarwrapper">
+            <p class="logo"><a href="index.html">
+              <img class="logo" src="_static/camps_dct_inv.png" alt="Logo"/>
+            </a></p>
+<h3><a href="index.html">Table Of Contents</a></h3>
+<ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="index.html">Home</a></li>
+<li class="toctree-l1"><a class="reference internal" href="core-modules.html">Core Modules</a></li>
+<li class="toctree-l1 current"><a class="reference internal" href="customizable-modules.html">Customizable Modules</a><ul class="current">
+<li class="toctree-l2"><a class="reference internal" href="crawler.html">crawler</a></li>
+<li class="toctree-l2"><a class="reference internal" href="filters.html">filters</a></li>
+<li class="toctree-l2 current"><a class="current reference internal" href="">persistence</a></li>
+<li class="toctree-l2"><a class="reference internal" href="common.html">common</a></li>
+</ul>
+</li>
+</ul>
+
+<div id="searchbox" style="display: none">
+  <h3>Quick search</h3>
+    <form class="search" action="search.html" method="get">
+      <input type="text" name="q" />
+      <input type="submit" value="Go" />
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+    <p class="searchtip" style="font-size: 90%">
+    Enter search terms or a module, class or function name.
+    </p>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="genindex.html" title="General Index"
+             >index</a></li>
+        <li class="right" >
+          <a href="py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li class="right" >
+          <a href="common.html" title="common Module"
+             >next</a> |</li>
+        <li class="right" >
+          <a href="filters.html" title="filters Module"
+             >previous</a> |</li>
+        <li><a href="index.html">CAMPS Data Collection Tool 1.0 documentation</a> &raquo;</li>
+          <li><a href="customizable-modules.html" >Customizable Modules</a> &raquo;</li> 
+      </ul>
+    </div>
+    <div class="footer">
+        &copy; Copyright 2015, fghso.
+      Created using <a href="http://sphinx-doc.org/">Sphinx</a> 1.2.3.
+    </div>
+  </body>
+</html>
