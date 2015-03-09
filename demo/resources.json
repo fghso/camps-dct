@@ -1,0 +1,16 @@
+{
+    "columns": ["id", "status", "crawler_name", "response_code"],
+    "resources": [
+        {"id": 1, "crawler_name": "c1", "response_code": 3},
+        {"id": 2, "crawler_name": "c2"},
+        {"id": 3, "response_code": 4},
+        {"id": 4},
+        {"id": 5},
+        {"id": 6, "response_code": 0},
+        {"id": 7},
+        {"id": 8, "crawler_name": "test"},
+        {"id": 9},
+        {"id": 10},
+        {"id": 11, "status": 2, "crawler_name": "ok", "response_code": 5}
+    ]
+} 

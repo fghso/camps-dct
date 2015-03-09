@@ -10,12 +10,12 @@ import persistence
 
 
 class BaseFilter(): 
-    """Abstract class. All filters should inherit from it or from other class that does this.."""
+    """Abstract class. All filters should inherit from it or from other class that inherits."""
 
     def __init__(self, configurationsDictionary): 
         """Constructor.  
         
-        Each filter receives everything in its corresponding filter section of the XML configuration file as the parameter configurationsDictionary.
+        Each filter receives everything in its corresponding filter section of the XML configuration file as the parameter *configurationsDictionary*.
         
         """
         self._extractConfig(configurationsDictionary)
@@ -34,7 +34,7 @@ class BaseFilter():
     def setup(self): 
         """Execute per client initialization procedures.
         
-        This method is called every time a connection to a new client is opened, allowing to execute initialization code on a per client basis (wich differs from __init__ that is called when the server instantiate the filter, i.e., __init__ is called just one time for the whole period of execution of the program).
+        This method is called every time a connection to a new client is opened, allowing to execute initialization code on a per client basis (wich differs from :meth:`__init__` that is called when the server instantiate the filter, i.e., :meth:`__init__` is called just one time for the whole period of execution of the program).
         
         """
         pass
@@ -44,7 +44,7 @@ class BaseFilter():
         
         Args:
             * *resourceID* (user defined type): ID of the resource to be collected, sent by the server.
-            * *extraInfo* (dict): Reference to a dictionary that can be used to pass information among sequential filters. It is not sent to clients and its value will always be None if the filter is executed in parallel.
+            * *extraInfo* (dict): Reference to a dictionary that can be used to pass information among sequential filters. It is not sent to clients and its value will always be ``None`` if the filter is executed in parallel.
             
         Returns:   
             A dictionary containing the desired filter information to be sent to clients.
@@ -54,13 +54,13 @@ class BaseFilter():
         
     
     def callback(self, resourceID, resourceInfo, newResources, extraInfo): 
-        """Process information sent by clients after a resources has been crawled.
+        """Process information sent by clients after a resource has been crawled.
         
         Args:
             * *resourceID* (user defined type): ID of the crawled resource.
-            * *resourceInfo* (dict): Resource information dictionary sent by client. Sequential filters receive this parameter as reference, so they can alter its value, but parallel filters receive just a copy of it. The server will store the final value of resourceInfo as it is after all filters were called back.
-            * *newResources* (list): List of new resources sent by client to be stored by the server. Sequential filters receive this parameter as reference, so they can alter its value, but parallel filters receive just a copy of it. The server will store the final value of newResources as it is after all filters were called back.
-            * *extraInfo* (dict): Dictionary that contains information sent by client to filters. Sequential filters receive this parameter as reference, so they can alter its value, but parallel filters receive just a copy of it. As in apply method, extraInfo can also be used to pass information among sequential filters (in the case of sequential filters, the original information received from crawler is stored in extraInfo["original"], so it is available at any time). This information is not used by the server.
+            * *resourceInfo* (dict): Resource information dictionary sent by client. Sequential filters receive this parameter as reference, so they can alter its value, but parallel filters receive just a copy of it. The server will store the final value of *resourceInfo* as it is after all filters were called back.
+            * *newResources* (list): List of new resources sent by client to be stored by the server. Sequential filters receive this parameter as reference, so they can alter its value, but parallel filters receive just a copy of it. The server will store the final value of *newResources* as it is after all filters were called back.
+            * *extraInfo* (dict): Dictionary that contains information sent by client to filters. Sequential filters receive this parameter as reference, so they can alter its value, but parallel filters receive just a copy of it. As in :meth:`apply`, *extraInfo* can also be used to pass information among sequential filters (in the case of sequential filters, the original information received from crawler is stored in *extraInfo["original"]*, so it is available at any time). This information is not used by the server.
         
         """
         pass
@@ -68,7 +68,7 @@ class BaseFilter():
     def finish(self): 
         """Execute per client finalization procedures.
         
-        This method is called every time a connection to a client is closed, allowing to execute finalization code on a per client basis. It is the counterpart of setup method.
+        This method is called every time a connection to a client is closed, allowing to execute finalization code on a per client basis. It is the counterpart of :meth:`setup`.
         
         """
         pass
@@ -76,7 +76,7 @@ class BaseFilter():
     def shutdown(self): 
         """Execute program finalization procedures (similar to a destructor).
         
-        This method is called when the server is shut down, allowing to execute finalization code in a global manner. It is intended to be the counterpart of __init__ method, but different from __del__ in that it is not bounded to the live of the filter object itself, but rather to the span of execution time of the server.
+        This method is called when the server is shut down, allowing to execute finalization code in a global manner. It is intended to be the counterpart of :meth:`__init__`, but differs from :meth:`__del__() <python:object.__del__>` in that it is not bounded to the live of the filter object itself, but rather to the span of execution time of the server.
         
         """
         pass

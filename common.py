@@ -2,7 +2,7 @@
 
 """Module to store shared code.
 
-Functions and classes are put here when they are meant to be reused in different parts of the program. Some of them were built just for internal use, but others (listed bellow) can also be in user code as well (for example, in crawler code).
+Functions and classes are put here when they are meant to be reused in different parts of the program. Some of them were built just for internal use, but others (listed bellow) can also be incorporated in user code as well (for example, in the :class:`crawler <crawler.DemoCrawler>` code).
 
 """
 
@@ -27,17 +27,21 @@ class EchoHandler():
     """
     
     globalConfig = {"verbose": None, "logging": None, "loggingpath": None}
-    """Mandatory configuration values. If a value for an option here is None, the handler respects the instance local configuration value for that option. Otherwise, the value specified here overrides any local value."""
+    """Mandatory configuration values. If a value for an option here is ``None``, the handler respects the instance local configuration value for that option. Otherwise, the value specified here overrides any local value."""
 
     def __init__(self, configurationsDictionary = {}, loggingFileName = "", defaultLoggingLevel = "INFO"):
         """Constructor.
         
-        The root logger configuration is done here using logging.basicConfig method. This means that loggingFileName and  defaultLoggingLevel options are defined by the first module in an import hierarchy that instantiate an EchoHandler object, as subsequent calls to logging.basicConfig have no effect (See Python's logging module documentation for details). So, for example, when running client.py it is the first module to instantiate an EchoHandler object. client.py imports crawler.py module, but as crawler.py is the second module in the hierarchy, it will use the root logger configuration defined in client.py, despite any local settings of loggingFileName and defaultLoggingLevel used.
+        Root logger configuration is done here using :func:`logging.basicConfig`. This means that *loggingFileName* and  *defaultLoggingLevel* parameters are defined by the first module in an import hierarchy that instantiate an :class:`EchoHandler` object, as subsequent calls to :func:`logging.basicConfig` have no effect. So, for example, when running the :doc:`client<client>`, it is the first module to instantiate an :class:`EchoHandler` object. :doc:`client<client>` imports the :mod:`crawler` module, but as :mod:`crawler` is the second module in the hierarchy, it will use the root logger configuration defined in :doc:`client<client>`, despite any local settings of *loggingFileName* and *defaultLoggingLevel* used.
         
         Args:
-            * *configurationsDictionary* (dict): Holds values for the 3 configuration options supported: verbose (bool), logging (bool) and loggingpath (str).
+            * *configurationsDictionary* (dict): Holds values for the three configuration options supported: verbose (bool), logging (bool) and loggingpath (str).
             * *loggingFileName* (str): Name of the file used to save logging messages.
-            * *defaultLoggingLevel* (str): Level at wich the root logger must be set. Supports any of the level names defined in Python's logging module (see logging module documentation for details).
+            * *defaultLoggingLevel* (str): Level at wich the root logger must be set. Supports any of the :ref:`level names <python:levels>` defined in Python's built-in logging module.
+            
+        .. seealso::
+        
+            Python's built-in :mod:`logging <python:logging>` module documentation.
         
         """
         self._extractConfig(configurationsDictionary)
@@ -57,10 +61,10 @@ class EchoHandler():
     def _extractConfig(self, configurationsDictionary):
         """Extract and store configurations.
         
-        The configurations are extracted from configurationsDictionary and stored in separate instance variables. Each configuration has a default value, so it is possible to use EchoHandler without specifying any of them. The values of globalConfig are also checked here and, if set, override the values given in configurationsDictionary, as well as default values. 
+        The configurations are extracted from *configurationsDictionary* and stored in separate instance variables. Each configuration has a default value, so it is possible to use :class:`EchoHandler` without specifying any of them. The values of :attr:`globalConfig` are also checked here and, if set, override the values given in *configurationsDictionary*, as well as default values. 
         
         Args: 
-            * *configurationsDictionary* (dict): Holds values for the 3 configuration options supported: verbose (bool), logging (bool) and loggingpath (str).
+            * *configurationsDictionary* (dict): Holds values for the three configuration options supported: verbose (bool), logging (bool) and loggingpath (str).
         
         """
         self.verbose = False
@@ -80,11 +84,11 @@ class EchoHandler():
         if (EchoHandler.globalConfig["loggingpath"] is not None): self.loggingPath = EchoHandler.globalConfig["loggingpath"]
         
     def out(self, message, loggingLevel = "", mode = "both"):
-        """Emit logging and/or printing messages.
+        """Log and/or print a message.
         
         Args: 
             * *message* (str): The message to be logged and/or printed.
-            * *loggingLevel* (str): Level to use when logging the message. Supports any of the level names defined in Python's logging module (see logging module documentation for details). If the level is bellow the default, no message is emited. If it is not specified, the default level is used.
+            * *loggingLevel* (str): Level to use when logging the message. Supports any of the :ref:`level names <python:levels>` defined in Python's built-in logging module. If the level is bellow the default, no message is emited. If it is not specified, the default level is used.
             * *mode* (str): Control wether the message should be only logged, only printed or both. The corresponding accepted values are: "logonly", "printonly" and "both". This gives a fine-grained control, at the code level, over the message output destination.
         
         """
@@ -158,16 +162,16 @@ if sys.platform == "win32":
 else: replace = os.rename
 
 def str2bool(stringToConvert):
-    """Convert strings to booleans.
+    """Convert a string to a boolean.
     
     Args:
-        * *stringToConvert* (str): The following string values are acepted as True: "true", "t", "yes", "y", "on", "1". The following string values are acepted as False: "false", "f", "no", "n", "off", "0".
+        * *stringToConvert* (str): The following string values are acepted as ``True``: "true", "t", "yes", "y", "on", "1". The following string values are acepted as ``False``: "false", "f", "no", "n", "off", "0".
        
     Returns:
-        True or False, depending on input value.
+        ``True`` or ``False``, depending on input value.
         
     Raises:
-        TypeError: If input string is not one of the acepted values.
+        :exc:`TypeError<python:exceptions.TypeError>`: If input string is not one of the accepted values.
     
     """
     if stringToConvert.lower() in ("true", "t", "yes", "y", "on", "1"): return True

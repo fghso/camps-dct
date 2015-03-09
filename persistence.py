@@ -2,7 +2,7 @@
 
 """Module to store persistence handler classes.
 
-Persistence handlers take care of all implementation details related to resource storage. They all expose a common interface (defined in BasePersistenceHandler) through wich the server (and/or filters/crawlers) can load, save and perform other operations over resources independently from where and how the resources are actually stored. At any point in time, the collection status of each resource must be one of those defined in the struct-like-class StatusCodes.
+Persistence handlers take care of all implementation details related to resource storage. They all expose a common interface (defined in :class:`BasePersistenceHandler`) through wich the server (and/or filters/crawlers) can load, save and perform other operations over resources independently from where and how the resources are actually stored. At any point in time, the collection status of each resource must be one of those defined in the struct-like-class :class:`StatusCodes`.
 
 """
 
@@ -24,7 +24,7 @@ from collections import deque
 class StatusCodes():
     """A struct-like-class to hold constants for resources status codes.
     
-    The numeric value of each code can be modified to match the one used in the final location where the resources are persisted. The name of each code must not be modified.
+    The numeric value of each code can be modified to match the one used in the final location where the resources are persisted. The name of each code (``SUCCEEDED``, ``INPROGRESS``, ``AVAILABLE``, ``FAILED``, ``ERROR``) must not be modified.
     
     """
     SUCCEEDED  =  2
@@ -35,7 +35,7 @@ class StatusCodes():
 
 
 class BasePersistenceHandler(): 
-    """Abstract class. All persistence handlers should inherit from it or from other class that does this."""
+    """Abstract class. All persistence handlers should inherit from it or from other class that inherits."""
  
     def __init__(self, configurationsDictionary): 
         """Constructor.  
@@ -58,17 +58,17 @@ class BasePersistenceHandler():
     def setup(self):
         """Execute per client initialization procedures.
         
-        This method is called every time a connection to a new client is opened, allowing to execute initialization code on a per client basis (wich differs from __init__ that is called when the server instantiate the persistence handler, i.e., __init__ is called just one time for the whole period of execution of the program).
+        This method is called every time a connection to a new client is opened, allowing to execute initialization code on a per client basis (wich differs from :meth:`__init__` that is called when the server instantiate the persistence handler, i.e., :meth:`__init__` is called just one time for the whole period of execution of the program).
         
         """
         pass
     
     def select(self): 
-        """Retrive an AVAILABLE resource.
+        """Retrive an ``AVAILABLE`` resource.
         
         Returns: 
-            A tuple in the format (resourceKey, resourceID, resourceInfo).
-            
+            A tuple in the format (*resourceKey*, *resourceID*, *resourceInfo*).
+        
             * *resourceKey* (user defined type): Value that uniquely identify the resource internally. It works like a primary key in relational databases and makes possible the existence of resources with the same ID, if needed.
             * *resourceID* (user defined type): Resource ID to be sent to a client.
             * *resourceInfo* (dict): Other information related to the resource, if there is any.
@@ -81,7 +81,7 @@ class BasePersistenceHandler():
         
         Args: 
             * *resourceKey* (user defined type): Value that uniquely identify the resource internally.
-            * *status* (StatusCodes): New status of the resource.
+            * *status* (:class:`StatusCodes`): New status of the resource.
             * *resourceInfo* (dict): Other information related to the resource, if there is any.
             
         """
@@ -91,7 +91,7 @@ class BasePersistenceHandler():
         """Insert new resources into the final location where resources are persisted.
         
         Args: 
-            * *resourcesList* (list): List of tuples containing all new resources to be inserted. Each resource is defined by a tuple in the format (resourceID, resourceInfo).
+            * *resourcesList* (list): List of tuples containing all new resources to be inserted. Each resource is defined by a tuple in the format (*resourceID*, *resourceInfo*).
             
         """
         pass
@@ -100,16 +100,16 @@ class BasePersistenceHandler():
         """Count the number of resources in each status category.
         
         Returns: 
-            A tuple in the format (total, succeeded, inprogress, available, failed, error) where all fields are integers representing the number of resources in the respective status category.
+            A tuple in the format (*total*, *succeeded*, *inprogress*, *available*, *failed*, *error*) where all fields are integers representing the number of resources with the respective status code.
             
         """
         return (0, 0, 0, 0, 0, 0)
     
     def reset(self, status): 
-        """Turn all resources in the specified status category into AVAILABLE.
+        """Change to ``AVAILABLE`` all resources with the status code given.
         
         Args:
-            * *status* (StatusCodes): Status of the resources to be reseted.
+            * *status* (:class:`StatusCodes`): Status of the resources to be reseted.
         
         Returns:
             Number of resources reseted.
@@ -120,7 +120,7 @@ class BasePersistenceHandler():
     def finish(self): 
         """Execute per client finalization procedures.
         
-        This method is called every time a connection to a client is closed, allowing to execute finalization code on a per client basis. It is the counterpart of setup method.
+        This method is called every time a connection to a client is closed, allowing to execute finalization code on a per client basis. It is the counterpart of :meth:`setup`.
         
         """
         pass
@@ -128,7 +128,7 @@ class BasePersistenceHandler():
     def shutdown(self): 
         """Execute program finalization procedures (similar to a destructor).
         
-        This method is called when the server is shut down, allowing to execute finalization code in a global manner. It is intended to be the counterpart of __init__ method, but different from __del__ in that it is not bounded to the live of the persistence handler object itself, but rather to the span of execution time of the server.
+        This method is called when the server is shut down, allowing to execute finalization code in a global manner. It is intended to be the counterpart of :meth:`__init__`, but differs from :meth:`__del__() <python:object.__del__>` in that it is not bounded to the live of the persistence handler object itself, but rather to the span of execution time of the server.
         
         """
         pass
@@ -136,7 +136,7 @@ class BasePersistenceHandler():
         
 # IMPORTANT NOTE: MemoryPersistenceHandler class was built as basis for FilePersistenceHandler and its extensions, 
 # and for test purposes. Altough it can be set in the configuration file, it is not intended for direct use in a 
-# production enviroment. Choose one of the file based handlers instead
+# production enviroment. In this case, choose one of the file based handlers instead
 class MemoryPersistenceHandler(BasePersistenceHandler):
     def __init__(self, configurationsDictionary): 
         BasePersistenceHandler.__init__(self, configurationsDictionary)
@@ -227,28 +227,35 @@ class MemoryPersistenceHandler(BasePersistenceHandler):
 class FilePersistenceHandler(MemoryPersistenceHandler):
     """Load and dump resources from/to a file.
     
-    All resources in the file are loaded into memory before the server oprations begin. So, this handler is recomended for small to medium size datasets that can be completely fitted in machine's memory. For larger datasets, consider using another persistence handler. Another option for large datasets is to divide the resources in more than one file, collecting the resources of each one at a time.
+    All resources in the file are loaded into memory before the server operations begin. So, this handler is recomended for small to medium size datasets that can be completely fitted in machine's memory. For larger datasets, consider using another persistence handler. Another option for large datasets is to divide the resources in more than one file, collecting the resources of one file at a time.
     
-    The default version of this handler supports CSV and JSON files. It is possible to add support to other file types by subclassing GenericFileTypeColumns and GenericFileTypeHandler, besides also extending the method _setFileHandler.
+    The default version of this handler supports CSV and JSON files. It is possible to add support to other file types by subclassing :class:`BaseFileColumns` and :class:`BaseFileHandler`. The new file type must also be included in :attr:`supportedFileTypes`.
     
     """
-    class GenericFileTypeColumns():
-        """Extract column names from the file.
-    
-        The method _extractColNames is where the column extraction really occurs. As it depends on the specific file type, it must be overriden. The method must return a list of column names.
+    class BaseFileColumns():
+        """Hold column names of data in the file, allowing fast access to names of ID, status and info columns."""
         
-        """
         def __init__(self, fileName, idColumn, statusColumn):
             self.names = self._extractColNames(fileName)
             self.idName = idColumn
             self.statusName = statusColumn
             self.infoNames = [name for name in self.names if (name not in (self.idName, self.statusName))]
-        def _extractColNames(self, fileName): return [] 
+            
+        def _extractColNames(self, fileName): 
+            """Extract column names from the file.
+            
+            Must be overriden, as column names extraction depends on the file type.
+            
+            Returns: 
+                A list of all column names in the file.
+        
+            """
+            return [] 
 
-    class GenericFileTypeHandler():
+    class BaseFileHandler():
         """Handle low level details about persistence in a specific file type.
     
-        Resources loaded from a file are stored in memory in a dictionary in the format {"id": X, "status": X, "info": {...}}. This handler is responsible for translating resources in this internal format to the format used in a specific file type and vice-versa.
+        Each resource loaded from a file is stored in memory in a dictionary in the format ``{"id": X, "status": X, "info": {...}}``, which is the resource internal representation format. This handler is responsible for translating resources in the internal representation format to the format used in a specific file type and vice-versa.
         
         """
         def __init__(self): self.status = StatusCodes() 
@@ -258,7 +265,7 @@ class FilePersistenceHandler(MemoryPersistenceHandler):
             
             Args: 
                 * *resource* (file specific type): Resource given in file format.
-                * *columns* (GenericFileTypeColumns subclass): Object holding column names information.
+                * *columns* (:class:`BaseFileColumns` subclass): Object holding column names.
             
             Returns:
                 A resource in internal representation format.
@@ -271,7 +278,7 @@ class FilePersistenceHandler(MemoryPersistenceHandler):
             
             Args: 
                 * *resource* (dict): Resource given in internal representation format.
-                * *columns* (GenericFileTypeColumns subclass): Object holding column names information.
+                * *columns* (:class:`BaseFileColumns` subclass): Object holding column names.
             
             Returns:
                 A resource in file format.
@@ -283,8 +290,8 @@ class FilePersistenceHandler(MemoryPersistenceHandler):
             """Load resources in file format and yield them in internal representation format.
             
             Args: 
-                * *file* (file object): File object bounded to the physical file where resources are stored.
-                * *columns* (GenericFileTypeColumns subclass): Object holding column names information.
+                * *file* (:ref:`file object<python:bltin-file-objects>`): File object bounded to the physical file where resources are stored.
+                * *columns* (:class:`BaseFileColumns` subclass): Object holding column names.
                 
             Yields:
                 A resource in internal representation format.
@@ -293,66 +300,33 @@ class FilePersistenceHandler(MemoryPersistenceHandler):
             yield {"id": None, "status": None, "info": None} 
             
         def dump(self, resources, file, columns):
-            """Save resources in internal representation format to file.
+            """Save resources in internal representation format to file format.
             
             Args: 
                 * *resources* (list): List of resources in internal representation format.
-                * *file* (file object): File object bounded to the physical file where resources will be stored.
-                * *columns* (GenericFileTypeColumns subclass): Object holding column names information.
+                * *file* (:ref:`file object<python:bltin-file-objects>`): File object bounded to the physical file where resources will be stored.
+                * *columns* (:class:`BaseFileColumns` subclass): Object holding column names.
 
             """        
             pass
-        
-    class JSONColumns(GenericFileTypeColumns):
-        def _extractColNames(self, fileName):
-            with open(fileName, "r") as file: content = file.read(1024)
-            columnsStart = content.index("[") + 1
-            columnsEnd = content.index("]")
-            columns = content[columnsStart:columnsEnd]
-            return [name.strip("\" ") for name in columns.split(",")]
-       
-    class JSONHandler(GenericFileTypeHandler):    
-        def parse(self, resource, columns):
-            parsed = {"id": resource[columns.idName]}
-            if ((columns.statusName in columns.names) and (columns.statusName in resource)): 
-                parsed["status"] = resource[columns.statusName]
-            else: parsed["status"] = self.status.AVAILABLE
-            if (columns.infoNames):
-                parsed["info"] = {}
-                for column in columns.infoNames:
-                    if (column in resource): parsed["info"][column] = resource[column]
-                    else: parsed["info"][column] = None
-            return parsed
-        
-        def unparse(self, resource, columns):
-            unparsed = {columns.idName: resource["id"]}
-            if (resource["status"] != self.status.AVAILABLE): unparsed[columns.statusName] = resource["status"]
-            if (resource["info"]): 
-                for key, value in resource["info"].iteritems(): 
-                    if (value is not None) and (key in columns.infoNames): unparsed[key] = value
-            return json.dumps(unparsed)
-    
-        def load(self, file, columns): 
-            input = json.load(file)
-            for resource in input["resources"]: 
-                yield self.parse(resource, columns)
-
-        def dump(self, resources, file, columns):
-            file.write("{\"columns\": %s, \"resources\": [" % json.dumps(columns.names))
-            separator = ""
-            for resource in resources:
-                file.write("%s%s" % (separator, self.unparse(resource, columns)))
-                separator = ", "
-            file.write("]}")
             
-    class CSVColumns(GenericFileTypeColumns):
+    class CSVColumns(BaseFileColumns):
+        """Hold column names of data in CSV files, allowing fast access to names of ID, status and info columns."""
+    
         def _extractColNames(self, fileName):
             with open(fileName, "r") as file: 
                 reader = csv.DictReader(file, quoting = csv.QUOTE_MINIMAL, quotechar = "'", skipinitialspace = True)
                 columns = reader.fieldnames
             return [col.strip("\"") for col in columns]
     
-    class CSVHandler(GenericFileTypeHandler):
+    class CSVHandler(BaseFileHandler):
+        """Handle low level details about persistence in CSV files.
+        
+        .. note::
+            
+            This class and :class:`FilePersistenceHandler.CSVColumns` uses Python's built-in :mod:`python:csv` module internally. 
+        
+        """
         def _parseValue(self, value):
             if (not value): return None
             if (not value.startswith("\"")):
@@ -411,7 +385,65 @@ class FilePersistenceHandler(MemoryPersistenceHandler):
                     for key, value in resource["info"].iteritems():
                         if (value is not None) and (key in columns.infoNames): row[key] = self._unparseValue(value)
                 writer.writerow(row)
+        
+    class JSONColumns(BaseFileColumns):
+        """Hold column names of data in JSON files, allowing fast access to names of ID, status and info columns."""
+    
+        def _extractColNames(self, fileName):
+            with open(fileName, "r") as file: content = file.read(1024)
+            columnsStart = content.index("[") + 1
+            columnsEnd = content.index("]")
+            columns = content[columnsStart:columnsEnd]
+            return [name.strip("\" ") for name in columns.split(",")]
+       
+    class JSONHandler(BaseFileHandler):    
+        """Handle low level details about persistence in JSON files.
+        
+        .. note::
+            
+            This class and :class:`FilePersistenceHandler.JSONColumns` uses Python's built-in :mod:`python:json` module internally. 
+        
+        """
+        def parse(self, resource, columns):
+            parsed = {"id": resource[columns.idName]}
+            if ((columns.statusName in columns.names) and (columns.statusName in resource)): 
+                parsed["status"] = resource[columns.statusName]
+            else: parsed["status"] = self.status.AVAILABLE
+            if (columns.infoNames):
+                parsed["info"] = {}
+                for column in columns.infoNames:
+                    if (column in resource): parsed["info"][column] = resource[column]
+                    else: parsed["info"][column] = None
+            return parsed
+        
+        def unparse(self, resource, columns):
+            unparsed = {columns.idName: resource["id"]}
+            if (resource["status"] != self.status.AVAILABLE): unparsed[columns.statusName] = resource["status"]
+            if (resource["info"]): 
+                for key, value in resource["info"].iteritems(): 
+                    if (value is not None) and (key in columns.infoNames): unparsed[key] = value
+            return json.dumps(unparsed)
+    
+        def load(self, file, columns): 
+            input = json.load(file)
+            for resource in input["resources"]: 
+                yield self.parse(resource, columns)
 
+        def dump(self, resources, file, columns):
+            file.write("{\"columns\": %s, \"resources\": [" % json.dumps(columns.names))
+            separator = ""
+            for resource in resources:
+                file.write("%s%s" % (separator, self.unparse(resource, columns)))
+                separator = ", "
+            file.write("]}")
+            
+    supportedFileTypes = {
+                         # Type   : [FileColumns, FileHandler]
+                           "CSV"  : ["CSVColumns", "CSVHandler"],
+                           "JSON" : ["JSONColumns", "JSONHandler"]
+                         }
+    """Association between file types and its columns and handler classes. The type of the current file is provided by the user directly (through the ``filetype`` option in the XML configuration file) or indirectly (through the file extension extracted from file name). When checking if the type of the current file is on the list of supported file types, the comparison between the strings is case insensitive."""
+                         
     def __init__(self, configurationsDictionary): 
         MemoryPersistenceHandler.__init__(self, configurationsDictionary)
         self.echo = common.EchoHandler(self.config["echo"])
@@ -432,7 +464,6 @@ class FilePersistenceHandler(MemoryPersistenceHandler):
                 self.resources.append(resource)
         except: raise
         finally: file.close()
-        print self.resources
         self.timer.start()
         
     def _extractConfig(self, configurationsDictionary):
@@ -447,16 +478,15 @@ class FilePersistenceHandler(MemoryPersistenceHandler):
     def _save(self, pk, id, status, info, changeInfo = True):
         with self.saveLock: MemoryPersistenceHandler._save(self, pk, id, status, info, changeInfo)
     
-    # Define internal file handler based on file type. You can extend this method to add support to other file types
     def _setFileHandler(self):
-        if (self.config["filetype"] == "json"): 
-            self.fileColumns = self.JSONColumns(self.config["filename"], self.config["resourceidcolumn"], self.config["statuscolumn"])
-            self.fileHandler = self.JSONHandler()
-        elif (self.config["filetype"] == "csv"): 
-            self.fileColumns = self.CSVColumns(self.config["filename"], self.config["resourceidcolumn"], self.config["statuscolumn"])
-            self.fileHandler = self.CSVHandler()
-        else: 
-            raise TypeError("Unknown file type '%s' for file '%s'." % (self.config["filetype"], self.config["filename"]))
+        for type, handler in FilePersistenceHandler.supportedFileTypes.iteritems():
+            if (self.config["filetype"] == type.lower()): 
+                FileColumnsClass = getattr(self, handler[0])
+                FileHandlerClass = getattr(self, handler[1])
+                self.fileColumns = FileColumnsClass(self.config["filename"], self.config["resourceidcolumn"], self.config["statuscolumn"])
+                self.fileHandler = FileHandlerClass()
+                return            
+        raise TypeError("Unknown file type '%s' for file '%s'." % (self.config["filetype"], self.config["filename"]))
             
     def _checkDumpException(function):
         def decoratedFunction(self, *args):
@@ -511,13 +541,15 @@ class FilePersistenceHandler(MemoryPersistenceHandler):
 class RolloverFilePersistenceHandler(FilePersistenceHandler):
     """Load and dump resources from/to files respecting limits of file size and/or number of resources per file.
     
-    This handler uses multiple instances of FilePersistenceHandler to allow insertion of new resources respecting limits specified by the user. It is also capable of reading and updating resources from multiple files.
+    This handler uses multiple instances of :class:`FilePersistenceHandler` to allow insertion of new resources respecting limits specified by the user. It is also capable of reading and updating resources from multiple files.
     
     The rollover handler leaves the low level details of persistence for the file handlers attached to each file, taking care of the coordination necessary to maintain consistency between them and also of the verification of limits established. 
     
-    When inserting new resources, every time the file size limit and/or number of resources per file limit is reached rollover handler opens a new file and assigns a new instance of FilePersistenceHandler to handle it. All resources, however, are maintained in memory. So, as in the case of FilePersistenceHandler, this handler is not well suited for large datasets that cannot be completely fitted in memory.
+    When inserting new resources, every time the file size limit and/or number of resources per file limit is reached rollover handler opens a new file and assigns a new instance of :class:`FilePersistenceHandler` to handle it. All resources, however, are maintained in memory. So, as in the case of :class:`FilePersistenceHandler`, this handler is not well suited for large datasets that cannot be completely fitted in memory.
     
-    This handler was inspired by Python's logging module RotatingFileHandler. See logging module documentation for more information.
+    .. note::
+    
+        This handler was inspired by Python's :class:`python:logging.handlers.RotatingFileHandler` class.
     
     """
     def __init__(self, configurationsDictionary): 
@@ -631,7 +663,11 @@ class RolloverFilePersistenceHandler(FilePersistenceHandler):
 class MySQLPersistenceHandler(BasePersistenceHandler):
     """Store and retrieve resources to/from a MySQL database. 
     
-    The table must already exists in the database and contain at least three columns: a primary key column, a resource ID column and a status column. This handler uses MySQL Connector/Python to interact with a MySQL database. See the Connector/Python online documentation for details.
+    The table must already exists in the database and contain at least three columns: a primary key column, a resource ID column and a status column.
+    
+    .. note::
+    
+        This handler uses `MySQL Connector/Python <http://dev.mysql.com/doc/connector-python/en/index.html>`_ to interact with MySQL databases. 
     
     """
     def __init__(self, configurationsDictionary):
