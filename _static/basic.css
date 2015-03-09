@@ -603,7 +603,7 @@ a.download-button {
   background: -webkit-linear-gradient(bottom, #1c4e63 0%, #11303d 100%); /* for webkit browsers */
   background: -moz-linear-gradient(bottom,  #1c4e63,  #11303d); /* for firefox 3.6+ */
   height: auto;
-  margin-left: 10px;
+  margin: 0 10px;
 }
 
 a.download-button span {
