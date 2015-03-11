@@ -2,7 +2,7 @@
 
 """Module to store persistence handler classes.
 
-Persistence handlers take care of all implementation details related to resource storage. They all expose a common interface (defined in :class:`BasePersistenceHandler`) through wich the server (and/or filters/crawlers) can load, save and perform other operations over resources independently from where and how the resources are actually stored. At any point in time, the collection status of each resource must be one of those defined in the struct-like-class :class:`StatusCodes`.
+Persistence handlers take care of all implementation details related to resource storage. They all expose a common interface (defined in :class:`BasePersistenceHandler`) through wich the server (and/or filters/crawlers) can load, save and perform other operations over resources independently from where and how the resources are actually stored. At any point in time, the collection status of each resource must be one of those defined in the struct-like class :class:`StatusCodes`.
 
 """
 
@@ -22,7 +22,7 @@ from collections import deque
 
 
 class StatusCodes():
-    """A struct-like-class to hold constants for resources status codes.
+    """A struct-like class to hold constants for resources status codes.
     
     The numeric value of each code can be modified to match the one used in the final location where the resources are persisted. The name of each code (``SUCCEEDED``, ``INPROGRESS``, ``AVAILABLE``, ``FAILED``, ``ERROR``) must not be modified.
     
