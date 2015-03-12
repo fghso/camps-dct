@@ -692,7 +692,7 @@ class MySQLPersistenceHandler(BasePersistenceHandler):
         else: self.config["onduplicateupdate"] = common.str2bool(self.config["onduplicateupdate"])
         
     def setup(self):
-        self.local.connection = mysql.connector.connect(user=self.config["user"], password=self.config["password"], host=self.config["host"], database=self.config["name"])
+        self.local.connection = mysql.connector.connect(user=self.config["user"], password=self.config["password"], host=self.config["host"], database=self.config["database"])
         self.local.lastSelectID = None
         
     def select(self):

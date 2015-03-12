@@ -8,4 +8,6 @@ Documentation:
 * [General information and usage instructions](https://github.com/fghso/camps-dct/wiki)
 * [Modules documentation](http://fghso.github.io/camps-dct/)
 
-This project is the result of improvements over past efforts made by our research group in collecting data for cientific analysis. The author thanks very much everyone who contributed somehow with ideias, suggestions, observations and corrections.
+This project is the result of improvements over past efforts made by [our research group](http://www.camps.dcc.ufmg.br/) in collecting data for scientific analysis. Altough perfomance was a concern during the development of the tool, the main focus were on usability, flexibility and extensibility, what helps to explain many of the design and implementation choices made.
+
+The author thanks very much everyone who contributed somehow with ideias, suggestions, observations and corrections. New contributions are still welcome and will be much appreciated.
