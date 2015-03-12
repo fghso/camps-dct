@@ -687,7 +687,7 @@ class MySQLPersistenceHandler(BasePersistenceHandler):
         connection.close()
         
     def _extractConfig(self, configurationsDictionary):
-        BasePersistenceHandler._extractConfig(configurationsDictionary)   
+        BasePersistenceHandler._extractConfig(self, configurationsDictionary)   
         if ("onduplicateupdate" not in self.config): self.config["onduplicateupdate"] = False
         else: self.config["onduplicateupdate"] = common.str2bool(self.config["onduplicateupdate"])
         
