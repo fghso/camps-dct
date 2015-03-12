@@ -60,6 +60,12 @@
 <em class="property">class </em><tt class="descclassname">common.</tt><tt class="descname">EchoHandler</tt><big>(</big><em>configurationsDictionary={}</em>, <em>loggingFileName=''</em>, <em>defaultLoggingLevel='INFO'</em><big>)</big><a class="headerlink" href="#common.EchoHandler" title="Permalink to this definition">¶</a></dt>
 <dd><p>Manage logging and printing of messages.</p>
 <p>Provides a unified and common infrastructure for information output in different parts of the program, besides abstracting low level details about output operations.</p>
+<dl class="attribute">
+<dt id="common.EchoHandler.globalConfig">
+<tt class="descname">globalConfig</tt><em class="property"> = {'logging': None, 'verbose': None, 'loggingpath': None}</em><a class="headerlink" href="#common.EchoHandler.globalConfig" title="Permalink to this definition">¶</a></dt>
+<dd><p>Mandatory configuration values. If a value for an option here is <tt class="docutils literal"><span class="pre">None</span></tt>, the handler respects the instance local configuration value for that option. Otherwise, the value specified here overrides any local value.</p>
+</dd></dl>
+
 <dl class="method">
 <dt id="common.EchoHandler.__init__">
 <tt class="descname">__init__</tt><big>(</big><em>configurationsDictionary={}</em>, <em>loggingFileName=''</em>, <em>defaultLoggingLevel='INFO'</em><big>)</big><a class="headerlink" href="#common.EchoHandler.__init__" title="Permalink to this definition">¶</a></dt>
@@ -84,7 +90,7 @@
 <dt id="common.EchoHandler._extractConfig">
 <tt class="descname">_extractConfig</tt><big>(</big><em>configurationsDictionary</em><big>)</big><a class="headerlink" href="#common.EchoHandler._extractConfig" title="Permalink to this definition">¶</a></dt>
 <dd><p>Extract and store configurations.</p>
-<p>The configurations are extracted from <em>configurationsDictionary</em> and stored in separate instance variables. Each configuration has a default value, so it is possible to use <a class="reference internal" href="#common.EchoHandler" title="common.EchoHandler"><tt class="xref py py-class docutils literal"><span class="pre">EchoHandler</span></tt></a> without specifying any of them. The values of <tt class="xref py py-attr docutils literal"><span class="pre">globalConfig</span></tt> are also checked here and, if set, override the values given in <em>configurationsDictionary</em>, as well as default values.</p>
+<p>The configurations are extracted from <em>configurationsDictionary</em> and stored in separate instance variables. Each configuration has a default value, so it is possible to use <a class="reference internal" href="#common.EchoHandler" title="common.EchoHandler"><tt class="xref py py-class docutils literal"><span class="pre">EchoHandler</span></tt></a> without specifying any of them. The values of <a class="reference internal" href="#common.EchoHandler.globalConfig" title="common.EchoHandler.globalConfig"><tt class="xref py py-attr docutils literal"><span class="pre">globalConfig</span></tt></a> are also checked here and, if set, override the values given in <em>configurationsDictionary</em>, as well as default values.</p>
 <dl class="docutils">
 <dt>Args: </dt>
 <dd><ul class="first last simple">

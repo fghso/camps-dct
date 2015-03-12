@@ -78,6 +78,13 @@
 </dd></dl>
 
 <dl class="method">
+<dt id="filters.BaseFilter.setup">
+<tt class="descname">setup</tt><big>(</big><big>)</big><a class="headerlink" href="#filters.BaseFilter.setup" title="Permalink to this definition">¶</a></dt>
+<dd><p>Execute per client initialization procedures.</p>
+<p>This method is called every time a connection to a new client is opened, allowing to execute initialization code on a per client basis (wich differs from <a class="reference internal" href="#filters.BaseFilter.__init__" title="filters.BaseFilter.__init__"><tt class="xref py py-meth docutils literal"><span class="pre">__init__()</span></tt></a> that is called when the server instantiate the filter, i.e., <a class="reference internal" href="#filters.BaseFilter.__init__" title="filters.BaseFilter.__init__"><tt class="xref py py-meth docutils literal"><span class="pre">__init__()</span></tt></a> is called just one time for the whole period of execution of the program).</p>
+</dd></dl>
+
+<dl class="method">
 <dt id="filters.BaseFilter.apply">
 <tt class="descname">apply</tt><big>(</big><em>resourceID</em>, <em>resourceInfo</em>, <em>extraInfo</em><big>)</big><a class="headerlink" href="#filters.BaseFilter.apply" title="Permalink to this definition">¶</a></dt>
 <dd><p>Process resource information before it is sent to a client.</p>
@@ -114,13 +121,6 @@
 <tt class="descname">finish</tt><big>(</big><big>)</big><a class="headerlink" href="#filters.BaseFilter.finish" title="Permalink to this definition">¶</a></dt>
 <dd><p>Execute per client finalization procedures.</p>
 <p>This method is called every time a connection to a client is closed, allowing to execute finalization code on a per client basis. It is the counterpart of <a class="reference internal" href="#filters.BaseFilter.setup" title="filters.BaseFilter.setup"><tt class="xref py py-meth docutils literal"><span class="pre">setup()</span></tt></a>.</p>
-</dd></dl>
-
-<dl class="method">
-<dt id="filters.BaseFilter.setup">
-<tt class="descname">setup</tt><big>(</big><big>)</big><a class="headerlink" href="#filters.BaseFilter.setup" title="Permalink to this definition">¶</a></dt>
-<dd><p>Execute per client initialization procedures.</p>
-<p>This method is called every time a connection to a new client is opened, allowing to execute initialization code on a per client basis (wich differs from <a class="reference internal" href="#filters.BaseFilter.__init__" title="filters.BaseFilter.__init__"><tt class="xref py py-meth docutils literal"><span class="pre">__init__()</span></tt></a> that is called when the server instantiate the filter, i.e., <a class="reference internal" href="#filters.BaseFilter.__init__" title="filters.BaseFilter.__init__"><tt class="xref py py-meth docutils literal"><span class="pre">__init__()</span></tt></a> is called just one time for the whole period of execution of the program).</p>
 </dd></dl>
 
 <dl class="method">
