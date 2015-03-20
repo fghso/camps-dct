@@ -113,7 +113,7 @@ else:
             status += str([clientStatus["clientid"], clientStatus["threadstate"], str(clientStatus["address"][0]), 
                         str(clientStatus["address"][1]), clientStatus["address"][2], clientStatus["pid"],
                         clientStatus["time"]["start"].strftime("%d/%m/%Y %H:%M:%S"), 
-                        clientStatus["time"]["lastrequest"].strftime("%d/%m/%Y %H:%M:%S"),
+                        clientStatus["time"]["lastrequest"].strftime("%d/%m/%Y %H:%M:%S") if (clientStatus["time"]["lastrequest"] is not None) else "-",
                         "%.2f" % clientStatus["time"]["agrserver"], "%.2f" % clientStatus["time"]["agrclient"],
                         "%.2f" % clientStatus["time"]["agrcrawler"], "%.2f" % clientStatus["time"]["avgserver"],
                         "%.2f" % clientStatus["time"]["avgclient"], "%.2f" % clientStatus["time"]["avgcrawler"],
@@ -142,7 +142,7 @@ else:
                             clientStatus["address"][2], 
                             clientStatus["pid"], 
                             "working on %s" % clientStatus["resourceid"] if (clientStatus["resourceid"]) else "waiting for new resource", 
-                            clientStatus["time"]["lastrequest"].strftime("%d/%m/%Y %H:%M:%S"), 
+                            clientStatus["time"]["lastrequest"].strftime("%d/%m/%Y %H:%M:%S") if (clientStatus["time"]["lastrequest"] is not None) else "-", 
                             clientStatus["amount"], 
                             #"" if (clientStatus["amount"] == 1) else "s",
                             "%02d:%02d:%02d" % (elapsedHoursMin[0],  elapsedHoursMin[1], elapsedMinSec[1])
@@ -268,7 +268,7 @@ else:
                             clientStatus["threadstate"], 
                             clientStatus["address"][0], 
                             "working on %s" % clientStatus["resourceid"] if (clientStatus["resourceid"]) else "waiting for new resource", 
-                            clientStatus["time"]["lastrequest"].strftime("%d/%m/%Y %H:%M:%S")
+                            clientStatus["time"]["lastrequest"].strftime("%d/%m/%Y %H:%M:%S") if (clientStatus["time"]["lastrequest"] is not None) else "-"
                         )
         else:
             status += "  No client connected right now.\n"

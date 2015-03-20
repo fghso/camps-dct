@@ -122,9 +122,9 @@ class ServerHandler(SocketServer.BaseRequestHandler):
                 
                 # Stop thread execution if the connection has been interrupted
                 if (not message): 
-                    clientResourceKey = clientsInfo[clientID][2]
                     echo.out("Connection to client %d has been abruptly closed." % clientID, "ERROR")
-                    persist.update(clientResourceKey, status.ERROR, None)
+                    clientResourceKey = clientsInfo[clientID][2]
+                    if (clientResourceKey is not None): persist.update(clientResourceKey, status.ERROR, None)
                     running = False
                     continue
 
@@ -216,8 +216,8 @@ class ServerHandler(SocketServer.BaseRequestHandler):
                         clientStatus["time"]["agrserver"] = serverAggregatedTimes[ID]
                         clientStatus["time"]["agrclient"] = clientAggregatedTimes[ID]
                         clientStatus["time"]["agrcrawler"] = crawlerAggregatedTimes[ID]
-                        clientStatus["time"]["avgserver"] = serverAggregatedTimes[ID] / numTimingMeasures[ID]
-                        clientStatus["time"]["avgclient"] = clientAggregatedTimes[ID] / numTimingMeasures[ID]
+                        clientStatus["time"]["avgserver"] = serverAggregatedTimes[ID] / numTimingMeasures[ID] if (numTimingMeasures[ID] > 0) else 0
+                        clientStatus["time"]["avgclient"] = clientAggregatedTimes[ID] / numTimingMeasures[ID] if (numTimingMeasures[ID] > 0) else 0
                         clientStatus["time"]["avgcrawler"] = crawlerAggregatedTimes[ID] / numCrawlingMeasures[ID] if (numCrawlingMeasures[ID] > 0) else 0
                         clientsStatusList.append(clientStatus)
                     # Server status
@@ -307,6 +307,7 @@ class ServerHandler(SocketServer.BaseRequestHandler):
                 if (self.clientID == 0): self.client.send({"command": "SD_RET", "fail": False})
                 
             connections -= 1
+            self.client.close()
             with finishedCondition: finishedCondition.notify_all()
         
     def removeClient(self, ID):
@@ -400,6 +401,7 @@ class ThreadedTCPServer(SocketServer.ThreadingMixIn, SocketServer.TCPServer):
             else: self.sequentialFilters.append(FilterClass(filterOptions))
         
         # Call SocketSever constructor
+        self.allow_reuse_address = True # Avoid "Address already in use" error when restarting server right after a shutdown
         SocketServer.TCPServer.__init__(self, (self.config["global"]["connection"]["address"], self.config["global"]["connection"]["port"]), ServerHandler)
     
     def run(self):

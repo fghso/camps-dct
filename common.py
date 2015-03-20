@@ -155,7 +155,7 @@ class NetworkHandler():
         
         
 # ==================== Methods ====================
-if sys.platform == "win32":
+if (sys.platform == "win32"):
     import win32api, win32con
     def replace(src, dst):
         win32api.MoveFileEx(src, dst, win32con.MOVEFILE_REPLACE_EXISTING)
