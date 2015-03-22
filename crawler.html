@@ -58,7 +58,7 @@
   <div class="section" id="module-crawler">
 <span id="crawler-module"></span><h1>crawler Module<a class="headerlink" href="#module-crawler" title="Permalink to this headline">¶</a></h1>
 <p>Module to store crawler classes.</p>
-<p>More than one class can be written here, but only one (that specified in the configuration file) will be used by the client to instantiate a crawler object whose crawl method will by called to do the collection of the resource received.</p>
+<p>More than one class can be written here, but only one (that specified in the configuration file) will be used by the client to instantiate a crawler object whose <a class="reference internal" href="#crawler.BaseCrawler.crawl" title="crawler.BaseCrawler.crawl"><tt class="xref py py-meth docutils literal"><span class="pre">crawl()</span></tt></a> method will by called to do the collection of the resource received.</p>
 <dl class="class">
 <dt id="crawler.BaseCrawler">
 <em class="property">class </em><tt class="descclassname">crawler.</tt><tt class="descname">BaseCrawler</tt><big>(</big><em>configurationsDictionary</em><big>)</big><a class="headerlink" href="#crawler.BaseCrawler" title="Permalink to this definition">¶</a></dt>
@@ -74,7 +74,7 @@
 <dt id="crawler.BaseCrawler._extractConfig">
 <tt class="descname">_extractConfig</tt><big>(</big><em>configurationsDictionary</em><big>)</big><a class="headerlink" href="#crawler.BaseCrawler._extractConfig" title="Permalink to this definition">¶</a></dt>
 <dd><p>Extract and store configurations.</p>
-<p>If some configuration needs any kind of pre-processing, this is done here. Extend this method if you need to pre-process custom configuration options.</p>
+<p>If some configuration needs any kind of pre-processing, it is done here. Extend this method if you need to pre-process custom configuration options.</p>
 </dd></dl>
 
 <dl class="method">
@@ -93,7 +93,7 @@
 <dd><p class="first">A tuple in the format (<em>resourceInfo</em>, <em>extraInfo</em>, <em>newResources</em>). Any element of the tuple can be <tt class="docutils literal"><span class="pre">None</span></tt>, depending on what the user desires.</p>
 <ul class="last simple">
 <li><em>resourceInfo</em> (dict): Resource information dictionary. This information is user defined and must be understood by the persistence handler used.</li>
-<li><em>extraInfo</em> (dict): Aditional information. This information is just passed to all filters via callback method and is not used by the server itself.</li>
+<li><em>extraInfo</em> (dict): Aditional information. This information is just passed to all filters via <a class="reference internal" href="filters.html#filters.BaseFilter.callback" title="filters.BaseFilter.callback"><tt class="xref py py-meth docutils literal"><span class="pre">callback()</span></tt></a> method and is not used by the server itself.</li>
 <li><em>newResources</em> (list): Resources to be stored by the server when the feedback option is enabled. Each new resource is described by a tuple in the format (<em>resourceID</em>, <em>resourceInfo</em>), where the first element is the resource ID (whose type is defined by the user) and the second element is a dictionary containing resource information (in a format understood by the persistence handler used).</li>
 </ul>
 </dd>

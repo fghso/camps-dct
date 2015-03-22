@@ -58,7 +58,7 @@
   <div class="section" id="module-persistence">
 <span id="persistence-module"></span><h1>persistence Module<a class="headerlink" href="#module-persistence" title="Permalink to this headline">¶</a></h1>
 <p>Module to store persistence handler classes.</p>
-<p>Persistence handlers take care of all implementation details related to resource storage. They all expose a common interface (defined in <a class="reference internal" href="#persistence.BasePersistenceHandler" title="persistence.BasePersistenceHandler"><tt class="xref py py-class docutils literal"><span class="pre">BasePersistenceHandler</span></tt></a>) through wich the server (and/or filters/crawlers) can load, save and perform other operations over resources independently from where and how the resources are actually stored. At any point in time, the collection status of each resource must be one of those defined in the struct-like class <a class="reference internal" href="#persistence.StatusCodes" title="persistence.StatusCodes"><tt class="xref py py-class docutils literal"><span class="pre">StatusCodes</span></tt></a>.</p>
+<p>Persistence handlers take care of all implementation details related to resource storage. They expose a common interface (defined in <a class="reference internal" href="#persistence.BasePersistenceHandler" title="persistence.BasePersistenceHandler"><tt class="xref py py-class docutils literal"><span class="pre">BasePersistenceHandler</span></tt></a>) through which the server (and/or filters/crawlers) can load, save and perform other operations over resources independently from where and how the resources are actually stored. At any point in time, the collection status of each resource must be one of those defined in the struct-like class <a class="reference internal" href="#persistence.StatusCodes" title="persistence.StatusCodes"><tt class="xref py py-class docutils literal"><span class="pre">StatusCodes</span></tt></a>.</p>
 <dl class="class">
 <dt id="persistence.StatusCodes">
 <em class="property">class </em><tt class="descclassname">persistence.</tt><tt class="descname">StatusCodes</tt><a class="headerlink" href="#persistence.StatusCodes" title="Permalink to this definition">¶</a></dt>
@@ -74,21 +74,21 @@
 <dt id="persistence.BasePersistenceHandler.__init__">
 <tt class="descname">__init__</tt><big>(</big><em>configurationsDictionary</em><big>)</big><a class="headerlink" href="#persistence.BasePersistenceHandler.__init__" title="Permalink to this definition">¶</a></dt>
 <dd><p>Constructor.</p>
-<p>Each persistence handler receives everything in its corresponding handler section of the XML configuration file as the parameter configurationsDictionary.</p>
+<p>Each persistence handler receives everything in its corresponding handler section of the XML configuration file as the parameter <em>configurationsDictionary</em>.</p>
 </dd></dl>
 
 <dl class="method">
 <dt id="persistence.BasePersistenceHandler._extractConfig">
 <tt class="descname">_extractConfig</tt><big>(</big><em>configurationsDictionary</em><big>)</big><a class="headerlink" href="#persistence.BasePersistenceHandler._extractConfig" title="Permalink to this definition">¶</a></dt>
 <dd><p>Extract and store configurations.</p>
-<p>If some configuration needs any kind of pre-processing, this is done here. Extend this method if you need to pre-process custom configuration options.</p>
+<p>If some configuration needs any kind of pre-processing, it is done here. Extend this method if you need to pre-process custom configuration options.</p>
 </dd></dl>
 
 <dl class="method">
 <dt id="persistence.BasePersistenceHandler.setup">
 <tt class="descname">setup</tt><big>(</big><big>)</big><a class="headerlink" href="#persistence.BasePersistenceHandler.setup" title="Permalink to this definition">¶</a></dt>
 <dd><p>Execute per client initialization procedures.</p>
-<p>This method is called every time a connection to a new client is opened, allowing to execute initialization code on a per client basis (wich differs from <a class="reference internal" href="#persistence.BasePersistenceHandler.__init__" title="persistence.BasePersistenceHandler.__init__"><tt class="xref py py-meth docutils literal"><span class="pre">__init__()</span></tt></a> that is called when the server instantiate the persistence handler, i.e., <a class="reference internal" href="#persistence.BasePersistenceHandler.__init__" title="persistence.BasePersistenceHandler.__init__"><tt class="xref py py-meth docutils literal"><span class="pre">__init__()</span></tt></a> is called just one time for the whole period of execution of the program).</p>
+<p>This method is called every time a connection to a new client is opened, allowing to execute initialization code on a per client basis (which differs from <a class="reference internal" href="#persistence.BasePersistenceHandler.__init__" title="persistence.BasePersistenceHandler.__init__"><tt class="xref py py-meth docutils literal"><span class="pre">__init__()</span></tt></a> that is called when the server instantiate the persistence handler, i.e., <a class="reference internal" href="#persistence.BasePersistenceHandler.__init__" title="persistence.BasePersistenceHandler.__init__"><tt class="xref py py-meth docutils literal"><span class="pre">__init__()</span></tt></a> is called just one time for the whole period of execution of the program).</p>
 </dd></dl>
 
 <dl class="method">
@@ -181,8 +181,8 @@
 <em class="property">class </em><tt class="descclassname">persistence.</tt><tt class="descname">FilePersistenceHandler</tt><big>(</big><em>configurationsDictionary</em><big>)</big><a class="headerlink" href="#persistence.FilePersistenceHandler" title="Permalink to this definition">¶</a></dt>
 <dd><p>Bases: <tt class="xref py py-class docutils literal"><span class="pre">persistence.MemoryPersistenceHandler</span></tt></p>
 <p>Load and dump resources from/to a file.</p>
-<p>All resources in the file are loaded into memory before the server operations begin. So, this handler is recomended for small to medium size datasets that can be completely fitted in machine&#8217;s memory. For larger datasets, consider using another persistence handler. Another option for large datasets is to divide the resources in more than one file, collecting the resources of one file at a time.</p>
-<p>The default version of this handler supports CSV and JSON files. It is possible to add support to other file types by subclassing <a class="reference internal" href="#persistence.FilePersistenceHandler.BaseFileColumns" title="persistence.FilePersistenceHandler.BaseFileColumns"><tt class="xref py py-class docutils literal"><span class="pre">BaseFileColumns</span></tt></a> and <a class="reference internal" href="#persistence.FilePersistenceHandler.BaseFileHandler" title="persistence.FilePersistenceHandler.BaseFileHandler"><tt class="xref py py-class docutils literal"><span class="pre">BaseFileHandler</span></tt></a>. The new file type must also be included in <a class="reference internal" href="#persistence.FilePersistenceHandler.supportedFileTypes" title="persistence.FilePersistenceHandler.supportedFileTypes"><tt class="xref py py-attr docutils literal"><span class="pre">supportedFileTypes</span></tt></a>.</p>
+<p>All resources in the file are loaded into memory before the server operations begin. So, this handler is recomended for small to medium size datasets that can be completely fitted into machine&#8217;s memory. For larger datasets, consider using another persistence handler. Another option for large datasets is to divide the resources in more than one file, collecting the resources of one file at a time.</p>
+<p>The default version of this handler supports CSV and JSON files. It is possible to add support to other file types by subclassing <a class="reference internal" href="#persistence.FilePersistenceHandler.BaseFileColumns" title="persistence.FilePersistenceHandler.BaseFileColumns"><tt class="xref py py-class docutils literal"><span class="pre">BaseFileColumns</span></tt></a> and <a class="reference internal" href="#persistence.FilePersistenceHandler.BaseFileHandler" title="persistence.FilePersistenceHandler.BaseFileHandler"><tt class="xref py py-class docutils literal"><span class="pre">BaseFileHandler</span></tt></a>. The new file type must also be included in  the <a class="reference internal" href="#persistence.FilePersistenceHandler.supportedFileTypes" title="persistence.FilePersistenceHandler.supportedFileTypes"><tt class="xref py py-attr docutils literal"><span class="pre">supportedFileTypes</span></tt></a> dictionary.</p>
 <dl class="class">
 <dt id="persistence.FilePersistenceHandler.BaseFileColumns">
 <em class="property">class </em><tt class="descname">BaseFileColumns</tt><big>(</big><em>fileName</em>, <em>idColumn</em>, <em>statusColumn</em><big>)</big><a class="headerlink" href="#persistence.FilePersistenceHandler.BaseFileColumns" title="Permalink to this definition">¶</a></dt>
@@ -213,7 +213,7 @@
 <dt>Args: </dt>
 <dd><ul class="first last simple">
 <li><em>resource</em> (file specific type): Resource given in file format.</li>
-<li><em>columns</em> (<tt class="xref py py-class docutils literal"><span class="pre">BaseFileColumns</span></tt> subclass): Object holding column names.</li>
+<li><em>columns</em> (<a class="reference internal" href="#persistence.FilePersistenceHandler.BaseFileColumns" title="persistence.FilePersistenceHandler.BaseFileColumns"><tt class="xref py py-class docutils literal"><span class="pre">BaseFileColumns</span></tt></a> subclass): Object holding column names.</li>
 </ul>
 </dd>
 <dt>Returns:</dt>
@@ -229,7 +229,7 @@
 <dt>Args: </dt>
 <dd><ul class="first last simple">
 <li><em>resource</em> (dict): Resource given in internal representation format.</li>
-<li><em>columns</em> (<tt class="xref py py-class docutils literal"><span class="pre">BaseFileColumns</span></tt> subclass): Object holding column names.</li>
+<li><em>columns</em> (<a class="reference internal" href="#persistence.FilePersistenceHandler.BaseFileColumns" title="persistence.FilePersistenceHandler.BaseFileColumns"><tt class="xref py py-class docutils literal"><span class="pre">BaseFileColumns</span></tt></a> subclass): Object holding column names.</li>
 </ul>
 </dd>
 <dt>Returns:</dt>
@@ -245,7 +245,7 @@
 <dt>Args: </dt>
 <dd><ul class="first last simple">
 <li><em>file</em> (<a class="reference external" href="https://docs.python.org/2/library/stdtypes.html#bltin-file-objects" title="(in Python v2.7)"><em class="xref std std-ref">file object</em></a>): File object bounded to the physical file where resources are stored.</li>
-<li><em>columns</em> (<tt class="xref py py-class docutils literal"><span class="pre">BaseFileColumns</span></tt> subclass): Object holding column names.</li>
+<li><em>columns</em> (<a class="reference internal" href="#persistence.FilePersistenceHandler.BaseFileColumns" title="persistence.FilePersistenceHandler.BaseFileColumns"><tt class="xref py py-class docutils literal"><span class="pre">BaseFileColumns</span></tt></a> subclass): Object holding column names.</li>
 </ul>
 </dd>
 <dt>Yields:</dt>
@@ -262,7 +262,7 @@
 <dd><ul class="first last simple">
 <li><em>resources</em> (list): List of resources in internal representation format.</li>
 <li><em>file</em> (<a class="reference external" href="https://docs.python.org/2/library/stdtypes.html#bltin-file-objects" title="(in Python v2.7)"><em class="xref std std-ref">file object</em></a>): File object bounded to the physical file where resources will be stored.</li>
-<li><em>columns</em> (<tt class="xref py py-class docutils literal"><span class="pre">BaseFileColumns</span></tt> subclass): Object holding column names.</li>
+<li><em>columns</em> (<a class="reference internal" href="#persistence.FilePersistenceHandler.BaseFileColumns" title="persistence.FilePersistenceHandler.BaseFileColumns"><tt class="xref py py-class docutils literal"><span class="pre">BaseFileColumns</span></tt></a> subclass): Object holding column names.</li>
 </ul>
 </dd>
 </dl>
@@ -284,7 +284,7 @@
 <p>Handle low level details about persistence in CSV files.</p>
 <div class="admonition note">
 <p class="first admonition-title">Note</p>
-<p class="last">This class and <a class="reference internal" href="#persistence.FilePersistenceHandler.CSVColumns" title="persistence.FilePersistenceHandler.CSVColumns"><tt class="xref py py-class docutils literal"><span class="pre">FilePersistenceHandler.CSVColumns</span></tt></a> uses Python&#8217;s built-in <a class="reference external" href="https://docs.python.org/2/library/csv.html#module-csv" title="(in Python v2.7)"><tt class="docutils literal"><span class="pre">csv</span></tt></a> module internally.</p>
+<p class="last">This class and <a class="reference internal" href="#persistence.FilePersistenceHandler.CSVColumns" title="persistence.FilePersistenceHandler.CSVColumns"><tt class="xref py py-class docutils literal"><span class="pre">CSVColumns</span></tt></a> class uses Python&#8217;s built-in <a class="reference external" href="https://docs.python.org/2/library/csv.html#module-csv" title="(in Python v2.7)"><tt class="docutils literal"><span class="pre">csv</span></tt></a> module internally.</p>
 </div>
 </dd></dl>
 
@@ -302,14 +302,14 @@
 <p>Handle low level details about persistence in JSON files.</p>
 <div class="admonition note">
 <p class="first admonition-title">Note</p>
-<p class="last">This class and <a class="reference internal" href="#persistence.FilePersistenceHandler.JSONColumns" title="persistence.FilePersistenceHandler.JSONColumns"><tt class="xref py py-class docutils literal"><span class="pre">FilePersistenceHandler.JSONColumns</span></tt></a> uses Python&#8217;s built-in <a class="reference external" href="https://docs.python.org/2/library/json.html#module-json" title="(in Python v2.7)"><tt class="docutils literal"><span class="pre">json</span></tt></a> module internally.</p>
+<p class="last">This class and <a class="reference internal" href="#persistence.FilePersistenceHandler.JSONColumns" title="persistence.FilePersistenceHandler.JSONColumns"><tt class="xref py py-class docutils literal"><span class="pre">JSONColumns</span></tt></a> uses Python&#8217;s built-in <a class="reference external" href="https://docs.python.org/2/library/json.html#module-json" title="(in Python v2.7)"><tt class="docutils literal"><span class="pre">json</span></tt></a> module internally.</p>
 </div>
 </dd></dl>
 
 <dl class="attribute">
 <dt id="persistence.FilePersistenceHandler.supportedFileTypes">
 <tt class="descclassname">FilePersistenceHandler.</tt><tt class="descname">supportedFileTypes</tt><em class="property"> = {'JSON': ['JSONColumns', 'JSONHandler'], 'CSV': ['CSVColumns', 'CSVHandler']}</em><a class="headerlink" href="#persistence.FilePersistenceHandler.supportedFileTypes" title="Permalink to this definition">¶</a></dt>
-<dd><p>Association between file types and its columns and handler classes. The type of the current file is provided by the user directly (through the <tt class="docutils literal"><span class="pre">filetype</span></tt> option in the XML configuration file) or indirectly (through the file extension extracted from file name). When checking if the type of the current file is on the list of supported file types, the comparison between the strings is case insensitive.</p>
+<dd><p>Associate file types and its columns and handler classes. The type of the current file is provided by the user directly (through the <tt class="docutils literal"><span class="pre">filetype</span></tt> option in the XML configuration file) or indirectly (through the file extension extracted from file name). When checking if the type of the current file is on the list of supported file types, the comparison between the strings is case insensitive.</p>
 </dd></dl>
 
 </dd></dl>
@@ -333,7 +333,7 @@
 <em class="property">class </em><tt class="descclassname">persistence.</tt><tt class="descname">MySQLPersistenceHandler</tt><big>(</big><em>configurationsDictionary</em><big>)</big><a class="headerlink" href="#persistence.MySQLPersistenceHandler" title="Permalink to this definition">¶</a></dt>
 <dd><p>Bases: <a class="reference internal" href="#persistence.BasePersistenceHandler" title="persistence.BasePersistenceHandler"><tt class="xref py py-class docutils literal"><span class="pre">persistence.BasePersistenceHandler</span></tt></a></p>
 <p>Store and retrieve resources to/from a MySQL database.</p>
-<p>The table must already exists in the database and contain at least three columns: a primary key column, a resource ID column and a status column.</p>
+<p>The table must already exist in the database and must contain at least three columns: a primary key column, a resource ID column and a status column.</p>
 <div class="admonition note">
 <p class="first admonition-title">Note</p>
 <p class="last">This handler uses <a class="reference external" href="http://dev.mysql.com/doc/connector-python/en/index.html">MySQL Connector/Python</a> to interact with MySQL databases.</p>

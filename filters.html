@@ -74,14 +74,14 @@
 <dt id="filters.BaseFilter._extractConfig">
 <tt class="descname">_extractConfig</tt><big>(</big><em>configurationsDictionary</em><big>)</big><a class="headerlink" href="#filters.BaseFilter._extractConfig" title="Permalink to this definition">¶</a></dt>
 <dd><p>Extract and store configurations.</p>
-<p>If some configuration needs any kind of pre-processing, this is done here. Extend this method if you need to pre-process custom configuration options.</p>
+<p>If some configuration needs any kind of pre-processing, it is done here. Extend this method if you need to pre-process custom configuration options.</p>
 </dd></dl>
 
 <dl class="method">
 <dt id="filters.BaseFilter.setup">
 <tt class="descname">setup</tt><big>(</big><big>)</big><a class="headerlink" href="#filters.BaseFilter.setup" title="Permalink to this definition">¶</a></dt>
 <dd><p>Execute per client initialization procedures.</p>
-<p>This method is called every time a connection to a new client is opened, allowing to execute initialization code on a per client basis (wich differs from <a class="reference internal" href="#filters.BaseFilter.__init__" title="filters.BaseFilter.__init__"><tt class="xref py py-meth docutils literal"><span class="pre">__init__()</span></tt></a> that is called when the server instantiate the filter, i.e., <a class="reference internal" href="#filters.BaseFilter.__init__" title="filters.BaseFilter.__init__"><tt class="xref py py-meth docutils literal"><span class="pre">__init__()</span></tt></a> is called just one time for the whole period of execution of the program).</p>
+<p>This method is called every time a connection to a new client is opened, allowing to execute initialization code on a per client basis (which differs from <a class="reference internal" href="#filters.BaseFilter.__init__" title="filters.BaseFilter.__init__"><tt class="xref py py-meth docutils literal"><span class="pre">__init__()</span></tt></a> that is called when the server instantiate the filter, i.e., <a class="reference internal" href="#filters.BaseFilter.__init__" title="filters.BaseFilter.__init__"><tt class="xref py py-meth docutils literal"><span class="pre">__init__()</span></tt></a> is called just one time for the whole period of execution of the program).</p>
 </dd></dl>
 
 <dl class="method">
