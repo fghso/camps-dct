@@ -2,7 +2,7 @@
 
 """Module to store crawler classes.
 
-More than one class can be written here, but only one (that specified in the configuration file) will be used by the client to instantiate a crawler object whose crawl method will by called to do the collection of the resource received. 
+More than one class can be written here, but only one (that specified in the configuration file) will be used by the client to instantiate a crawler object whose :meth:`crawl() <BaseCrawler.crawl>` method will by called to do the collection of the resource received. 
 
 """
 
@@ -25,7 +25,7 @@ class BaseCrawler:
     def _extractConfig(self, configurationsDictionary):
         """Extract and store configurations.
         
-        If some configuration needs any kind of pre-processing, this is done here. Extend this method if you need to pre-process custom configuration options.
+        If some configuration needs any kind of pre-processing, it is done here. Extend this method if you need to pre-process custom configuration options.
         
         """
         self.config = configurationsDictionary
@@ -44,7 +44,7 @@ class BaseCrawler:
             A tuple in the format (*resourceInfo*, *extraInfo*, *newResources*). Any element of the tuple can be ``None``, depending on what the user desires.
 
             * *resourceInfo* (dict): Resource information dictionary. This information is user defined and must be understood by the persistence handler used. 
-            * *extraInfo* (dict): Aditional information. This information is just passed to all filters via callback method and is not used by the server itself. 
+            * *extraInfo* (dict): Aditional information. This information is just passed to all filters via :meth:`callback() <filters.BaseFilter.callback>` method and is not used by the server itself. 
             * *newResources* (list): Resources to be stored by the server when the feedback option is enabled. Each new resource is described by a tuple in the format (*resourceID*, *resourceInfo*), where the first element is the resource ID (whose type is defined by the user) and the second element is a dictionary containing resource information (in a format understood by the persistence handler used).
                 
         """

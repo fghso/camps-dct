@@ -32,12 +32,12 @@ class EchoHandler():
     def __init__(self, configurationsDictionary = {}, loggingFileName = "", defaultLoggingLevel = "INFO"):
         """Constructor.
         
-        Root logger configuration is done here using :func:`logging.basicConfig`. This means that *loggingFileName* and  *defaultLoggingLevel* parameters are defined by the first module in an import hierarchy that instantiate an :class:`EchoHandler` object, as subsequent calls to :func:`logging.basicConfig` have no effect. So, for example, when running the :doc:`client<client>`, it is the first module to instantiate an :class:`EchoHandler` object. :doc:`client<client>` imports the :mod:`crawler` module, but as :mod:`crawler` is the second module in the hierarchy, it will use the root logger configuration defined in :doc:`client<client>`, despite any local settings of *loggingFileName* and *defaultLoggingLevel* used.
+        Root logger configuration is done here using :func:`logging.basicConfig`. This means that *loggingFileName* and  *defaultLoggingLevel* parameters are defined by the first module in an import hierarchy that instantiate an :class:`EchoHandler` object, as subsequent calls to :func:`logging.basicConfig` have no effect. So, for example, when running the :doc:`client<client>`, it is the first module to instantiate an :class:`EchoHandler` object. The :doc:`client<client>` module imports the :mod:`crawler` module, but as :mod:`crawler` is the second module in the hierarchy, it will use the root logger configuration defined in :doc:`client<client>`, despite any local settings of *loggingFileName* and *defaultLoggingLevel*.
         
         Args:
             * *configurationsDictionary* (dict): Holds values for the three configuration options supported: verbose (bool), logging (bool) and loggingpath (str).
             * *loggingFileName* (str): Name of the file used to save logging messages.
-            * *defaultLoggingLevel* (str): Level at wich the root logger must be set. Supports any of the :ref:`level names <python:levels>` defined in Python's built-in logging module.
+            * *defaultLoggingLevel* (str): Level at which the root logger must be set. Supports any of the :ref:`level names <python:levels>` defined in Python's built-in logging module.
             
         .. seealso::
         
@@ -89,7 +89,7 @@ class EchoHandler():
         Args: 
             * *message* (str): The message to be logged and/or printed.
             * *loggingLevel* (str): Level to use when logging the message. Supports any of the :ref:`level names <python:levels>` defined in Python's built-in logging module. If the level is bellow the default, no message is emited. If it is not specified, the default level is used.
-            * *mode* (str): Control wether the message should be only logged, only printed or both. The corresponding accepted values are: "logonly", "printonly" and "both". This gives a fine-grained control, at the code level, over the message output destination.
+            * *mode* (str): Control wether the message should be only logged, only printed or both. The corresponding accepted values are: "logonly", "printonly" and "both". This gives a fine-grained control, at the code level, over the output destination of the message.
         
         """
         if (self.logging) and (mode != "printonly"): 
@@ -165,7 +165,7 @@ def str2bool(stringToConvert):
     """Convert a string to a boolean.
     
     Args:
-        * *stringToConvert* (str): The following string values are acepted as ``True``: "true", "t", "yes", "y", "on", "1". The following string values are acepted as ``False``: "false", "f", "no", "n", "off", "0".
+        * *stringToConvert* (str): The following string values are accepted as ``True``: "true", "t", "yes", "y", "on", "1". The following string values are accepted as ``False``: "false", "f", "no", "n", "off", "0".
        
     Returns:
         ``True`` or ``False``, depending on input value.

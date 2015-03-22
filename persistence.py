@@ -2,7 +2,7 @@
 
 """Module to store persistence handler classes.
 
-Persistence handlers take care of all implementation details related to resource storage. They all expose a common interface (defined in :class:`BasePersistenceHandler`) through wich the server (and/or filters/crawlers) can load, save and perform other operations over resources independently from where and how the resources are actually stored. At any point in time, the collection status of each resource must be one of those defined in the struct-like class :class:`StatusCodes`.
+Persistence handlers take care of all implementation details related to resource storage. They expose a common interface (defined in :class:`BasePersistenceHandler`) through which the server (and/or filters/crawlers) can load, save and perform other operations over resources independently from where and how the resources are actually stored. At any point in time, the collection status of each resource must be one of those defined in the struct-like class :class:`StatusCodes`.
 
 """
 
@@ -40,7 +40,7 @@ class BasePersistenceHandler():
     def __init__(self, configurationsDictionary): 
         """Constructor.  
         
-        Each persistence handler receives everything in its corresponding handler section of the XML configuration file as the parameter configurationsDictionary. 
+        Each persistence handler receives everything in its corresponding handler section of the XML configuration file as the parameter *configurationsDictionary*. 
         
         """
         self._extractConfig(configurationsDictionary)
@@ -49,7 +49,7 @@ class BasePersistenceHandler():
     def _extractConfig(self, configurationsDictionary):
         """Extract and store configurations.
         
-        If some configuration needs any kind of pre-processing, this is done here. Extend this method if you need to pre-process custom configuration options.
+        If some configuration needs any kind of pre-processing, it is done here. Extend this method if you need to pre-process custom configuration options.
         
         """
         self.config = configurationsDictionary
@@ -58,7 +58,7 @@ class BasePersistenceHandler():
     def setup(self):
         """Execute per client initialization procedures.
         
-        This method is called every time a connection to a new client is opened, allowing to execute initialization code on a per client basis (wich differs from :meth:`__init__` that is called when the server instantiate the persistence handler, i.e., :meth:`__init__` is called just one time for the whole period of execution of the program).
+        This method is called every time a connection to a new client is opened, allowing to execute initialization code on a per client basis (which differs from :meth:`__init__` that is called when the server instantiate the persistence handler, i.e., :meth:`__init__` is called just one time for the whole period of execution of the program).
         
         """
         pass
@@ -227,9 +227,9 @@ class MemoryPersistenceHandler(BasePersistenceHandler):
 class FilePersistenceHandler(MemoryPersistenceHandler):
     """Load and dump resources from/to a file.
     
-    All resources in the file are loaded into memory before the server operations begin. So, this handler is recomended for small to medium size datasets that can be completely fitted in machine's memory. For larger datasets, consider using another persistence handler. Another option for large datasets is to divide the resources in more than one file, collecting the resources of one file at a time.
+    All resources in the file are loaded into memory before the server operations begin. So, this handler is recomended for small to medium size datasets that can be completely fitted into machine's memory. For larger datasets, consider using another persistence handler. Another option for large datasets is to divide the resources in more than one file, collecting the resources of one file at a time.
     
-    The default version of this handler supports CSV and JSON files. It is possible to add support to other file types by subclassing :class:`BaseFileColumns` and :class:`BaseFileHandler`. The new file type must also be included in :attr:`supportedFileTypes`.
+    The default version of this handler supports CSV and JSON files. It is possible to add support to other file types by subclassing :class:`BaseFileColumns` and :class:`BaseFileHandler`. The new file type must also be included in  the :attr:`supportedFileTypes` dictionary.
     
     """
     class BaseFileColumns():
@@ -265,7 +265,7 @@ class FilePersistenceHandler(MemoryPersistenceHandler):
             
             Args: 
                 * *resource* (file specific type): Resource given in file format.
-                * *columns* (:class:`BaseFileColumns` subclass): Object holding column names.
+                * *columns* (:class:`BaseFileColumns <FilePersistenceHandler.BaseFileColumns>` subclass): Object holding column names.
             
             Returns:
                 A resource in internal representation format.
@@ -278,7 +278,7 @@ class FilePersistenceHandler(MemoryPersistenceHandler):
             
             Args: 
                 * *resource* (dict): Resource given in internal representation format.
-                * *columns* (:class:`BaseFileColumns` subclass): Object holding column names.
+                * *columns* (:class:`BaseFileColumns <FilePersistenceHandler.BaseFileColumns>` subclass): Object holding column names.
             
             Returns:
                 A resource in file format.
@@ -291,7 +291,7 @@ class FilePersistenceHandler(MemoryPersistenceHandler):
             
             Args: 
                 * *file* (:ref:`file object<python:bltin-file-objects>`): File object bounded to the physical file where resources are stored.
-                * *columns* (:class:`BaseFileColumns` subclass): Object holding column names.
+                * *columns* (:class:`BaseFileColumns <FilePersistenceHandler.BaseFileColumns>` subclass): Object holding column names.
                 
             Yields:
                 A resource in internal representation format.
@@ -305,7 +305,7 @@ class FilePersistenceHandler(MemoryPersistenceHandler):
             Args: 
                 * *resources* (list): List of resources in internal representation format.
                 * *file* (:ref:`file object<python:bltin-file-objects>`): File object bounded to the physical file where resources will be stored.
-                * *columns* (:class:`BaseFileColumns` subclass): Object holding column names.
+                * *columns* (:class:`BaseFileColumns <FilePersistenceHandler.BaseFileColumns>` subclass): Object holding column names.
 
             """        
             pass
@@ -324,7 +324,7 @@ class FilePersistenceHandler(MemoryPersistenceHandler):
         
         .. note::
             
-            This class and :class:`FilePersistenceHandler.CSVColumns` uses Python's built-in :mod:`python:csv` module internally. 
+            This class and :class:`CSVColumns <FilePersistenceHandler.CSVColumns>` class uses Python's built-in :mod:`python:csv` module internally. 
         
         """
         def _parseValue(self, value):
@@ -401,7 +401,7 @@ class FilePersistenceHandler(MemoryPersistenceHandler):
         
         .. note::
             
-            This class and :class:`FilePersistenceHandler.JSONColumns` uses Python's built-in :mod:`python:json` module internally. 
+            This class and :class:`JSONColumns <FilePersistenceHandler.JSONColumns>` uses Python's built-in :mod:`python:json` module internally. 
         
         """
         def parse(self, resource, columns):
@@ -442,7 +442,7 @@ class FilePersistenceHandler(MemoryPersistenceHandler):
                            "CSV"  : ["CSVColumns", "CSVHandler"],
                            "JSON" : ["JSONColumns", "JSONHandler"]
                          }
-    """Association between file types and its columns and handler classes. The type of the current file is provided by the user directly (through the ``filetype`` option in the XML configuration file) or indirectly (through the file extension extracted from file name). When checking if the type of the current file is on the list of supported file types, the comparison between the strings is case insensitive."""
+    """Associate file types and its columns and handler classes. The type of the current file is provided by the user directly (through the ``filetype`` option in the XML configuration file) or indirectly (through the file extension extracted from file name). When checking if the type of the current file is on the list of supported file types, the comparison between the strings is case insensitive."""
                          
     def __init__(self, configurationsDictionary): 
         MemoryPersistenceHandler.__init__(self, configurationsDictionary)
@@ -663,7 +663,7 @@ class RolloverFilePersistenceHandler(FilePersistenceHandler):
 class MySQLPersistenceHandler(BasePersistenceHandler):
     """Store and retrieve resources to/from a MySQL database. 
     
-    The table must already exists in the database and contain at least three columns: a primary key column, a resource ID column and a status column.
+    The table must already exist in the database and must contain at least three columns: a primary key column, a resource ID column and a status column.
     
     .. note::
     

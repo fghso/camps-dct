@@ -23,7 +23,7 @@ class BaseFilter():
     def _extractConfig(self, configurationsDictionary):
         """Extract and store configurations.
         
-        If some configuration needs any kind of pre-processing, this is done here. Extend this method if you need to pre-process custom configuration options.
+        If some configuration needs any kind of pre-processing, it is done here. Extend this method if you need to pre-process custom configuration options.
         
         """
         self.config = configurationsDictionary
@@ -34,7 +34,7 @@ class BaseFilter():
     def setup(self): 
         """Execute per client initialization procedures.
         
-        This method is called every time a connection to a new client is opened, allowing to execute initialization code on a per client basis (wich differs from :meth:`__init__` that is called when the server instantiate the filter, i.e., :meth:`__init__` is called just one time for the whole period of execution of the program).
+        This method is called every time a connection to a new client is opened, allowing to execute initialization code on a per client basis (which differs from :meth:`__init__` that is called when the server instantiate the filter, i.e., :meth:`__init__` is called just one time for the whole period of execution of the program).
         
         """
         pass
