@@ -208,10 +208,6 @@ def loadConfig(configFilePath):
     if ("loopforever" not in config["server"]): config["server"]["loopforever"] = False
     else: config["server"]["loopforever"] = str2bool(config["server"]["loopforever"])
     
-        # Persistence
-    if (isinstance(config["server"]["persistence"]["handler"], list)): 
-        config["server"]["persistence"]["handler"] = config["server"]["persistence"]["handler"][0]
-        
         # Filters
     if ("filtering" not in config["server"]): config["server"]["filtering"] = {"filter": []}
     if (not isinstance(config["server"]["filtering"]["filter"], list)): config["server"]["filtering"]["filter"] = [config["server"]["filtering"]["filter"]]

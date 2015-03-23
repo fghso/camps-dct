@@ -15,20 +15,18 @@
             <verbose>True</verbose>
         </echo>
         <persistence>
-            <handler>
-                <class>FilePersistenceHandler</class>
-                <filename>resources.csv</filename>
-                <resourceidcolumn>id</resourceidcolumn>
-                <statuscolumn>status</statuscolumn>
-                <savetimedelta>25</savetimedelta>
-            </handler>
+            <class>FilePersistenceHandler</class>
+            <filename>resources.csv</filename>
+            <resourceidcolumn>id</resourceidcolumn>
+            <statuscolumn>status</statuscolumn>
+            <savetimedelta>25</savetimedelta>
         </persistence>
         <filtering>
             <filter>
                 <class>SaveResourcesFilter</class>
                 <name>savejson</name>
                 <parallel>True</parallel>
-                <handler>
+                <persistence>
                     <class>RolloverFilePersistenceHandler</class>
                     <filename>new_resources.json</filename>
                     <resourceidcolumn>id</resourceidcolumn>
@@ -36,18 +34,18 @@
                     <savetimedelta>25</savetimedelta>
                     <sizethreshold>500</sizethreshold>
                     <amountthreshold>5</amountthreshold>
-                </handler>
+                </persistence>
             </filter>
             <filter>
                 <class>SaveResourcesFilter</class>
                 <name>savecsv</name>
-                <handler>
+                <persistence>
                     <class>FilePersistenceHandler</class>
                     <filename>new_resources.csv</filename>
                     <resourceidcolumn>id</resourceidcolumn>
                     <statuscolumn>status</statuscolumn>
                     <savetimedelta>25</savetimedelta>
-                </handler>
+                </persistence>
             </filter>
         </filtering>
     </server>

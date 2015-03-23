@@ -387,8 +387,8 @@ class ThreadedTCPServer(SocketServer.ThreadingMixIn, SocketServer.TCPServer):
         
         # Get persistence handler instance
         self.echo.out("Initializing persistence handler...")
-        PersistenceHandlerClass = getattr(persistence, self.config["server"]["persistence"]["handler"]["class"])
-        self.persist = PersistenceHandlerClass(self.config["server"]["persistence"]["handler"])
+        PersistenceHandlerClass = getattr(persistence, self.config["server"]["persistence"]["class"])
+        self.persist = PersistenceHandlerClass(self.config["server"]["persistence"])
         
         # Get filters instances
         self.echo.out("Initializing filters...")

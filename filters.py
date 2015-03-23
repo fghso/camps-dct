@@ -90,8 +90,8 @@ class SaveResourcesFilter(BaseFilter):
     """
     def __init__(self, configurationsDictionary): 
         BaseFilter.__init__(self, configurationsDictionary)
-        PersistenceHandlerClass = getattr(persistence, self.config["handler"]["class"])
-        self.persist = PersistenceHandlerClass(self.config["handler"])
+        PersistenceHandlerClass = getattr(persistence, self.config["persistence"]["class"])
+        self.persist = PersistenceHandlerClass(self.config["persistence"])
         
     def setup(self): self.persist.setup()
         
