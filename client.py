@@ -48,7 +48,7 @@ else: clientID = message["clientid"]
 echo = common.EchoHandler(config["client"]["echo"], "client%s[%s%s].log" % (clientID, socket.gethostname(), config["global"]["connection"]["port"]))
 
 # Execute collection
-echo.out("Connected to server with ID %s " % clientID)
+echo.out("Connected to server with ID %s." % clientID)
 server.send({"command": "GET_ID"})
 while (True):
     try:
