@@ -555,7 +555,6 @@ class RolloverFilePersistenceHandler(FilePersistenceHandler):
     def __init__(self, configurationsDictionary): 
         self.originalConfig = deepcopy(configurationsDictionary)
         MemoryPersistenceHandler.__init__(self, configurationsDictionary)
-        self.echo = common.EchoHandler(self.config["echo"])
         self._setFileHandler()
         self.fileHandlersList = []
         self.nextSuffixNumber = 1

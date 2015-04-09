@@ -27,9 +27,9 @@ import crawler
 
 # Load configurations
 config = common.loadConfig(args.configFilePath)
-if (args.verbose is not None): config["global"]["echo"]["verbose"] = common.str2bool(args.verbose)
-if (args.logging is not None): config["global"]["echo"]["logging"] = common.str2bool(args.logging)
-if (args.loggingPath is not None): config["global"]["echo"]["loggingpath"] = args.loggingPath
+if (args.verbose is not None): config["global"]["echo"]["mandatory"]["verbose"] = common.str2bool(args.verbose)
+if (args.logging is not None): config["global"]["echo"]["mandatory"]["logging"] = common.str2bool(args.logging)
+if (args.loggingPath is not None): config["global"]["echo"]["mandatory"]["loggingpath"] = args.loggingPath
 
 # Get an instance of the crawler
 CrawlerClass = getattr(crawler, config["client"]["crawler"]["class"])

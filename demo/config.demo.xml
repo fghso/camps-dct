@@ -6,20 +6,20 @@
             <port>7777</port>
         </connection>
         <echo>
-            <logging>True</logging>
+            <verbose>True</verbose>
             <loggingpath>../logs</loggingpath>
         </echo>
     </global>
     <server>
-        <echo>
-            <verbose>True</verbose>
-        </echo>
         <persistence>
             <class>FilePersistenceHandler</class>
             <filename>resources.csv</filename>
             <resourceidcolumn>id</resourceidcolumn>
             <statuscolumn>status</statuscolumn>
             <savetimedelta>25</savetimedelta>
+            <echo>
+                <verbose>False</verbose>
+            </echo>
         </persistence>
         <filtering>
             <filter>
@@ -34,6 +34,9 @@
                     <savetimedelta>25</savetimedelta>
                     <sizethreshold>500</sizethreshold>
                     <amountthreshold>5</amountthreshold>
+                    <echo>
+                        <verbose>False</verbose>
+                    </echo> 
                 </persistence>
             </filter>
             <filter>
@@ -45,19 +48,16 @@
                     <resourceidcolumn>id</resourceidcolumn>
                     <statuscolumn>status</statuscolumn>
                     <savetimedelta>25</savetimedelta>
+                    <echo>
+                        <verbose>False</verbose>
+                    </echo>
                 </persistence>
             </filter>
         </filtering>
     </server>
     <client>
-        <echo>
-            <verbose>True</verbose>
-        </echo>
         <crawler>
             <class>DemoCrawler</class>
-            <echo>
-                <verbose>True</verbose>
-            </echo>
         </crawler>
     </client>
 </config>

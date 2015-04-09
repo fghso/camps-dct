@@ -26,8 +26,11 @@ class EchoHandler():
     
     """
     
-    globalConfig = {"verbose": None, "logging": None, "loggingpath": None}
-    """Mandatory configuration values. If a value for an option here is ``None``, the handler respects the instance local configuration value for that option. Otherwise, the value specified here overrides any local value."""
+    defaultConfig = {"verbose": False, "logging": True, "loggingpath": "."}
+    """Default configuration values. If no local value has been specified for an option in an instance, the value defined here for that option is used instead."""
+    
+    mandatoryConfig = {"verbose": None, "logging": None, "loggingpath": None}
+    """Mandatory configuration values. If a value for an option here is ``None``, the handler respects the instance local configuration value for that option (or the default configuration value if no local value has been specified). Otherwise, the value specified here overrides any local value."""
 
     def __init__(self, configurationsDictionary = {}, loggingFileName = "", defaultLoggingLevel = "INFO"):
         """Constructor.
@@ -51,7 +54,6 @@ class EchoHandler():
         self.callingModuleName = inspect.getmodulename(frameRecords[1])
         
         # Set up logging
-        if (EchoHandler.globalConfig["loggingpath"]): self.loggingPath = EchoHandler.globalConfig["loggingpath"]
         if not os.path.exists(self.loggingPath): os.makedirs(self.loggingPath)
         if (not loggingFileName): loggingFileName = self.callingModuleName + ".log"
         logging.basicConfig(format=u"%(asctime)s %(name)s %(levelname)s: %(message)s", datefmt="%d/%m/%Y %H:%M:%S", 
@@ -61,15 +63,15 @@ class EchoHandler():
     def _extractConfig(self, configurationsDictionary):
         """Extract and store configurations.
         
-        The configurations are extracted from *configurationsDictionary* and stored in separate instance variables. Each configuration has a default value, so it is possible to use :class:`EchoHandler` without specifying any of them. The values of :attr:`globalConfig` are also checked here and, if set, override the values given in *configurationsDictionary*, as well as default values. 
+        The configurations are extracted from *configurationsDictionary* and stored in separate instance variables. Each configuration has a default value, defined in :attr:`defaultConfig`, so it is possible to use :class:`EchoHandler` without specifying any of them. The values of :attr:`mandatoryConfig` are also checked here and, if set, override the values given in *configurationsDictionary*, as well as default values. 
         
         Args: 
             * *configurationsDictionary* (dict): Holds values for the three configuration options supported: verbose (bool), logging (bool) and loggingpath (str).
         
         """
-        self.verbose = False
-        self.logging = True
-        self.loggingPath = "."
+        self.verbose = EchoHandler.defaultConfig["verbose"]
+        self.logging = EchoHandler.defaultConfig["logging"]
+        self.loggingPath = EchoHandler.defaultConfig["loggingpath"]
         
         if (configurationsDictionary):
             if ("verbose" in configurationsDictionary): 
@@ -79,9 +81,9 @@ class EchoHandler():
             if ("loggingpath" in configurationsDictionary): 
                 self.loggingPath = configurationsDictionary["loggingpath"]
         
-        if (EchoHandler.globalConfig["verbose"] is not None): self.verbose = EchoHandler.globalConfig["verbose"]
-        if (EchoHandler.globalConfig["logging"] is not None): self.logging = EchoHandler.globalConfig["logging"]
-        if (EchoHandler.globalConfig["loggingpath"] is not None): self.loggingPath = EchoHandler.globalConfig["loggingpath"]
+        if (EchoHandler.mandatoryConfig["verbose"] is not None): self.verbose = EchoHandler.mandatoryConfig["verbose"]
+        if (EchoHandler.mandatoryConfig["logging"] is not None): self.logging = EchoHandler.mandatoryConfig["logging"]
+        if (EchoHandler.mandatoryConfig["loggingpath"] is not None): self.loggingPath = EchoHandler.mandatoryConfig["loggingpath"]
         
     def out(self, message, loggingLevel = "", mode = "both"):
         """Log and/or print a message.
@@ -186,21 +188,22 @@ def loadConfig(configFilePath):
     # Connection
     config["global"]["connection"]["port"] = int(config["global"]["connection"]["port"])
     
+    # Echo
+    config["global"]["echo"]["mandatory"] = EchoHandler.mandatoryConfig
+    
     # Global default values
     if ("feedback" not in config["global"]): config["global"]["feedback"] = False
     else: config["global"]["feedback"] = str2bool(config["global"]["feedback"])
     
     if ("echo" in config["global"]):
         if ("verbose" in config["global"]["echo"]): 
-            EchoHandler.globalConfig["verbose"] = str2bool(config["global"]["echo"]["verbose"])
+            EchoHandler.defaultConfig["verbose"] = str2bool(config["global"]["echo"]["verbose"])
         
         if ("logging" in config["global"]["echo"]): 
-            EchoHandler.globalConfig["logging"] = str2bool(config["global"]["echo"]["logging"])
+            EchoHandler.defaultConfig["logging"] = str2bool(config["global"]["echo"]["logging"])
             
         if ("loggingpath" in config["global"]["echo"]): 
-            EchoHandler.globalConfig["loggingpath"] = config["global"]["echo"]["loggingpath"]
-            
-    config["global"]["echo"] = EchoHandler.globalConfig
+            EchoHandler.defaultConfig["loggingpath"] = config["global"]["echo"]["loggingpath"]
     
     # Server default values
     if ("echo" not in config["server"]): config["server"]["echo"] = {}
