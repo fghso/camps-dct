@@ -21,6 +21,7 @@ class BaseCrawler:
         
         """
         self._extractConfig(configurationsDictionary)
+        self.echo = common.EchoHandler(self.config["echo"])
        
     def _extractConfig(self, configurationsDictionary):
         """Extract and store configurations.
@@ -55,14 +56,12 @@ class DemoCrawler(BaseCrawler):
     """Example crawler, just for demonstration."""
 
     def crawl(self, resourceID, filters):
-        echo = common.EchoHandler(self.config["echo"])
-
-        echo.out("Resource received: %s" % resourceID)
+        self.echo.out("Resource received: %s" % resourceID)
         
         sleepTime = 30
-        echo.out("Sleeping for %d seconds..." % sleepTime)
+        self.echo.out("Sleeping for %d seconds..." % sleepTime)
         time.sleep(sleepTime)
-        echo.out("Awaked!\n")
+        self.echo.out("Awaked!\n")
         
         newResources = []
         newResources.append((resourceID + 1, {"crawler_name": "c1", "response_code": 3}))
