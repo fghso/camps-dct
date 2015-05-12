@@ -167,7 +167,7 @@ def str2bool(stringToConvert):
     """Convert a string to a boolean.
     
     Args:
-        * *stringToConvert* (str): The following string values are accepted as ``True``: "true", "t", "yes", "y", "on", "1". The following string values are accepted as ``False``: "false", "f", "no", "n", "off", "0".
+        * *stringToConvert* (str): The following string values are accepted as ``True``: "true", "t", "yes", "y", "on", "1". The following string values are accepted as ``False``: "false", "f", "no", "n", "off", "0". Input string evaluation is always case insensitive.
        
     Returns:
         ``True`` or ``False``, depending on input value.
