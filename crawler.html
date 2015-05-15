@@ -92,7 +92,7 @@
 <dt>Returns:   </dt>
 <dd><p class="first">A tuple in the format (<em>resourceInfo</em>, <em>extraInfo</em>, <em>newResources</em>). Any element of the tuple can be <tt class="docutils literal"><span class="pre">None</span></tt>, depending on what the user desires.</p>
 <ul class="last simple">
-<li><em>resourceInfo</em> (dict): Resource information dictionary. This information is user defined and must be understood by the persistence handler used.</li>
+<li><em>resourceInfo</em> (dict): Resource information dictionary, used to update resource information at the server side. This information is user defined and must be understood by the persistence handler used.</li>
 <li><em>extraInfo</em> (dict): Aditional information. This information is just passed to all filters via <a class="reference internal" href="filters.html#filters.BaseFilter.callback" title="filters.BaseFilter.callback"><tt class="xref py py-meth docutils literal"><span class="pre">callback()</span></tt></a> method and is not used by the server itself.</li>
 <li><em>newResources</em> (list): Resources to be stored by the server when the feedback option is enabled. Each new resource is described by a tuple in the format (<em>resourceID</em>, <em>resourceInfo</em>), where the first element is the resource ID (whose type is defined by the user) and the second element is a dictionary containing resource information (in a format understood by the persistence handler used).</li>
 </ul>
