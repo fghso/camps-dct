@@ -31,10 +31,6 @@ if (args.verbose is not None): config["global"]["echo"]["mandatory"]["verbose"] 
 if (args.logging is not None): config["global"]["echo"]["mandatory"]["logging"] = common.str2bool(args.logging)
 if (args.loggingPath is not None): config["global"]["echo"]["mandatory"]["loggingpath"] = args.loggingPath
 
-# Get an instance of the crawler
-CrawlerClass = getattr(crawler, config["client"]["crawler"]["class"])
-collector = CrawlerClass(config["client"]["crawler"])
-
 # Connect to server
 processID = os.getpid()
 server = common.NetworkHandler()
@@ -46,6 +42,10 @@ else: clientID = message["clientid"]
 
 # Configure echoing
 echo = common.EchoHandler(config["client"]["echo"], "client%s[%s%s].log" % (clientID, socket.gethostname(), config["global"]["connection"]["port"]))
+
+# Get an instance of the crawler
+CrawlerClass = getattr(crawler, config["client"]["crawler"]["class"])
+collector = CrawlerClass(config["client"]["crawler"])
 
 # Execute collection
 echo.out("Connected to server with ID %s." % clientID)
