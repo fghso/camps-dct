@@ -674,7 +674,7 @@ class MySQLPersistenceHandler(BasePersistenceHandler):
         self.local = threading.local()
         
         # Get column names
-        connection = mysql.connector.connect(user=self.config["user"], password=self.config["password"], host=self.config["host"], database=self.config["name"])
+        connection = mysql.connector.connect(**self.config["connargs"])
         cursor = connection.cursor()
         query = "SELECT * FROM " + self.config["table"] + " LIMIT 0"
         cursor.execute(query)
@@ -686,12 +686,12 @@ class MySQLPersistenceHandler(BasePersistenceHandler):
         connection.close()
         
     def _extractConfig(self, configurationsDictionary):
-        BasePersistenceHandler._extractConfig(self, configurationsDictionary)   
+        BasePersistenceHandler._extractConfig(self, configurationsDictionary)
         if ("onduplicateupdate" not in self.config): self.config["onduplicateupdate"] = False
         else: self.config["onduplicateupdate"] = common.str2bool(self.config["onduplicateupdate"])
         
     def setup(self):
-        self.local.connection = mysql.connector.connect(user=self.config["user"], password=self.config["password"], host=self.config["host"], database=self.config["database"])
+        self.local.connection = mysql.connector.connect(**self.config["connargs"])
         self.local.lastSelectID = None
         
     def select(self):
@@ -723,6 +723,10 @@ class MySQLPersistenceHandler(BasePersistenceHandler):
         cursor.close()
         
     def insert(self, resourcesList):
+        # The method cursor.executemany() is optimized for multiple inserts, batching all data into a single INSERT INTO
+        # statement. This method would be the best to use here but unfortunately it does not parse the DEFAULT keyword 
+        # correctly. This way, the alternative is to pre-build the query and send it to cursor.execute() instead.
+    
         cursor = self.local.connection.cursor()
         query = "INSERT INTO " + self.config["table"] + " (" + ", ".join(self.colNames) + ") VALUES "
         
@@ -742,7 +746,7 @@ class MySQLPersistenceHandler(BasePersistenceHandler):
         query += ", ".join(values)
         if (self.config["onduplicateupdate"]):
             query += " ON DUPLICATE KEY UPDATE " + ", ".join(["{0} = VALUES({0})".format(column) for column in self.infoColNames])
-            
+        
         cursor.execute(query, data)
         self.local.connection.commit()        
         cursor.close()

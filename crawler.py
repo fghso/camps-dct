@@ -44,7 +44,7 @@ class BaseCrawler:
         Returns:   
             A tuple in the format (*resourceInfo*, *extraInfo*, *newResources*). Any element of the tuple can be ``None``, depending on what the user desires.
 
-            * *resourceInfo* (dict): Resource information dictionary. This information is user defined and must be understood by the persistence handler used. 
+            * *resourceInfo* (dict): Resource information dictionary, used to update resource information at the server side. This information is user defined and must be understood by the persistence handler used. 
             * *extraInfo* (dict): Aditional information. This information is just passed to all filters via :meth:`callback() <filters.BaseFilter.callback>` method and is not used by the server itself. 
             * *newResources* (list): Resources to be stored by the server when the feedback option is enabled. Each new resource is described by a tuple in the format (*resourceID*, *resourceInfo*), where the first element is the resource ID (whose type is defined by the user) and the second element is a dictionary containing resource information (in a format understood by the persistence handler used).
                 
