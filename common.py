@@ -116,7 +116,7 @@ class NetworkHandler():
     def _defaultSerializer(self, obj):
         if isinstance(obj, datetime): return {"__datetime__": calendar.timegm(obj.utctimetuple())}
         elif isinstance(obj, set): return tuple(obj)
-        raise TypeError("%s is not JSON serializable" % obj)
+        raise TypeError("'%s' is not JSON serializable" % obj)
         
     def _defaultDeserializer(self, dictionary):
         if ("__datetime__" in dictionary): return datetime.utcfromtimestamp(dictionary["__datetime__"])

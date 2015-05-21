@@ -105,7 +105,7 @@ else:
                         serverStatus["counts"]["failed"], serverStatus["counts"]["error"]])
         status += "\n\n  Clients:\n"
         if (clientsStatusList): 
-            status += str("    [id, state, hostname, address, port, pid, start, lastrequest, agrserver, agrclient, agrcrawler, avgserver, avgclient, avgcrawler, resource, amount]\n    ")
+            status += str("    [id, state, hostname, address, port, pid, start, lastrequest, agrserver, agrclient, agrcrawler, timingmeasures, crawlingmeasures, resource, amount]\n    ")
         else: 
             status += "    No client connected right now.\n"
         for clientStatus in clientsStatusList:
@@ -114,9 +114,11 @@ else:
                         str(clientStatus["address"][1]), clientStatus["address"][2], clientStatus["pid"],
                         clientStatus["time"]["start"].strftime("%d/%m/%Y %H:%M:%S"), 
                         clientStatus["time"]["lastrequest"].strftime("%d/%m/%Y %H:%M:%S") if (clientStatus["time"]["lastrequest"] is not None) else "-",
-                        "%.2f" % clientStatus["time"]["agrserver"], "%.2f" % clientStatus["time"]["agrclient"],
-                        "%.2f" % clientStatus["time"]["agrcrawler"], "%.2f" % clientStatus["time"]["avgserver"],
-                        "%.2f" % clientStatus["time"]["avgclient"], "%.2f" % clientStatus["time"]["avgcrawler"],
+                        "%.2f" % clientStatus["time"]["agrserver"], 
+                        "%.2f" % clientStatus["time"]["agrclient"],
+                        "%.2f" % clientStatus["time"]["agrcrawler"], 
+                        clientStatus["time"]["timingmeasures"], 
+                        clientStatus["time"]["crawlingmeasures"],
                         clientStatus["resourceid"] if (clientStatus["resourceid"]) else "waiting", 
                         clientStatus["amount"]])
             status += "\n    "
@@ -186,20 +188,28 @@ else:
         connectedClients = float(len([client for client in clientsStatusList if client["threadstate"] == " "]))
         disconnectedClients = float(len([client for client in clientsStatusList if client["threadstate"] == "+"]))
         removingClients = float(len([client for client in clientsStatusList if client["threadstate"] == "-"]))
+        workingClients = float(len([client for client in clientsStatusList if (client["threadstate"] == " " and client["resourceid"])]))
+        waitingClients = float(len([client for client in clientsStatusList if (client["threadstate"] == " " and not client["resourceid"])]))
         connectedClientsPercent = ((connectedClients / clientsTotal) * 100) if (clientsTotal > 0) else 0.0
         disconnectedClientsPercent = ((disconnectedClients / clientsTotal) * 100) if (clientsTotal > 0) else 0.0
         removingClientsPercent = ((removingClients / clientsTotal) * 100) if (clientsTotal > 0) else 0.0
+        workingClientsPercent = ((workingClients / connectedClients) * 100) if (connectedClients > 0) else 0.0
+        waitingClientsPercent = ((waitingClients / connectedClients) * 100) if (connectedClients > 0) else 0.0
         
-        sumAvgServerTime = sum([clientStatus["time"]["avgserver"] for clientStatus in clientsStatusList])
-        avgServerMinSec = divmod(sumAvgServerTime / clientsTotal, 60) if (clientsTotal > 0) else (0,0)
+        sumTimingMeasures = sum([clientStatus["time"]["timingmeasures"] for clientStatus in clientsStatusList])
+        sumCrawlingMeasures = sum([clientStatus["time"]["crawlingmeasures"] for clientStatus in clientsStatusList])
+        avgServerTime = sumAgrServerTime / sumTimingMeasures if (sumTimingMeasures > 0) else 0.0
+        avgServerMinSec = divmod(avgServerTime / clientsTotal, 60) if (clientsTotal > 0) else (0,0)
         avgServerHoursMin = divmod(avgServerMinSec[0], 60)
-        sumAvgClientTime = sum([clientStatus["time"]["avgclient"] for clientStatus in clientsStatusList])
-        avgClientMinSec = divmod(sumAvgClientTime/ clientsTotal, 60) if (clientsTotal > 0) else (0,0)
+        avgClientTime = sumAgrClientTime / sumTimingMeasures if (sumTimingMeasures > 0) else 0.0
+        avgClientMinSec = divmod(avgClientTime / clientsTotal, 60) if (clientsTotal > 0) else (0,0)
         avgClientHoursMin = divmod(avgClientMinSec[0], 60)
-        sumAvgCrawlerTime = sum([clientStatus["time"]["avgcrawler"] for clientStatus in clientsStatusList])
-        avgCrawlerMinSec = divmod(sumAvgCrawlerTime / clientsTotal, 60) if (clientsTotal > 0) else (0,0)
+        avgCrawlerTime = sumAgrCrawlerTime / sumCrawlingMeasures if (sumCrawlingMeasures > 0) else 0.0
+        avgCrawlerMinSec = divmod(avgCrawlerTime / clientsTotal, 60) if (clientsTotal > 0) else (0,0)
         avgCrawlerHoursMin = divmod(avgCrawlerMinSec[0], 60)
         
+        # serverElapsedTime is not used here to calculate the average number of resources per 
+        # second to avoid accouting server idle time. Thus clientElapsedTime is used instead
         numResourcesProcessed = float(sum([clientStatus["amount"] for clientStatus in clientsStatusList]))
         avgResourcesPerclient = numResourcesProcessed / clientsTotal if (clientsTotal > 0) else 0.0
         clientsResourcesPerSec = [float(clientStatus["amount"]) / clientElapsedTime if (clientElapsedTime > 0) else 0.0 for (clientStatus, clientElapsedTime) in zip(clientsStatusList, clientsElapsedTimes)]
@@ -219,7 +229,13 @@ else:
         resourcesErrorPercent = ((resourcesError / resourcesTotal) * 100) if (resourcesTotal > 0) else 0.0
         resourcesProcessedPercent = ((resourcesProcessed / resourcesTotal) * 100) if (resourcesTotal > 0) else 0.0
         
-        estimatedTimeToFinish = (sumAvgCrawlerTime / (clientsTotal ** 2)) * (resourcesAvailable + resourcesInProgress) if (clientsTotal > 0) else 0.0
+        # Another way to infer estimatedTimeToFinish is using the average time for a request/response round trip. 
+        # To collect a resource, the client has to make at least two requests: one to get a resource ID to crawl 
+        # and another one to signal that the crawling process has been completed (either if it succeeded or failed). 
+        # The average round trip time is the sum of the average server processing time per request plus the average 
+        # client processing time per response. So, the final code is: 
+        # estimatedTimeToFinish = (avgServerMinSec[1] + avgClientMinSec[1]) * 2 * (resourcesAvailable + resourcesInProgress)
+        estimatedTimeToFinish = (1.0 / avgResourcesPerSec) * (resourcesAvailable + resourcesInProgress) if (avgResourcesPerSec > 0) else 0.0
         estimatedMinSec = divmod(estimatedTimeToFinish, 60)
         estimatedHoursMin = divmod(estimatedMinSec[0], 60)
         
@@ -241,6 +257,8 @@ else:
         status += "      Connected clients: %d (%.2f%%)\n" % (connectedClients, connectedClientsPercent)
         status += "      Disconnected clients: %d (%.2f%%)\n" % (disconnectedClients, disconnectedClientsPercent)
         status += "      Clients being removed: %d (%.2f%%)\n" % (removingClients, removingClientsPercent)
+        status += "      Connected clients working: %d (%.2f%%)\n" % (workingClients, workingClientsPercent)
+        status += "      Connected clients waiting: %d (%.2f%%)\n" % (waitingClients, waitingClientsPercent)
         
         status += "    Number of resources processed: %d\n" % numResourcesProcessed
         status += "      Average resources processed per client: %.2f\n" % avgResourcesPerclient

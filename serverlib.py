@@ -22,13 +22,13 @@ from copy import deepcopy
 #    collection start time and last GET_ID request time] 
 clientsInfo = {} 
 
-# Stores a reference for the thread running the client and an event to interrupt its execution
+# Store a reference for the thread running the client and an event to interrupt its execution
 clientsThreads = {}
 
-# Defines the next ID to give to a new client
+# Define the next ID to give to a new client
 nextFreeID = 1
 
-# Stores the number of active connections
+# Store the number of active connections
 connections = 0
 
 # Timing variables
@@ -216,9 +216,8 @@ class ServerHandler(SocketServer.BaseRequestHandler):
                         clientStatus["time"]["agrserver"] = serverAggregatedTimes[ID]
                         clientStatus["time"]["agrclient"] = clientAggregatedTimes[ID]
                         clientStatus["time"]["agrcrawler"] = crawlerAggregatedTimes[ID]
-                        clientStatus["time"]["avgserver"] = serverAggregatedTimes[ID] / numTimingMeasures[ID] if (numTimingMeasures[ID] > 0) else 0
-                        clientStatus["time"]["avgclient"] = clientAggregatedTimes[ID] / numTimingMeasures[ID] if (numTimingMeasures[ID] > 0) else 0
-                        clientStatus["time"]["avgcrawler"] = crawlerAggregatedTimes[ID] / numCrawlingMeasures[ID] if (numCrawlingMeasures[ID] > 0) else 0
+                        clientStatus["time"]["timingmeasures"] = numTimingMeasures[ID]
+                        clientStatus["time"]["crawlingmeasures"] = numCrawlingMeasures[ID]
                         clientsStatusList.append(clientStatus)
                     # Server status
                     serverStatus = {"pid": os.getpid()}
@@ -280,10 +279,11 @@ class ServerHandler(SocketServer.BaseRequestHandler):
                     running = False
                 
                 endServerTime = timeit.default_timer()
-                serverAggregatedTimes[clientID] += (endServerTime - startServerTime)
-                clientAggregatedTimes[clientID] += (endClientTime - startClientTime)
-                numTimingMeasures[clientID] += 1
-                if (command == "DONE_ID"):
+                if (command == "GET_ID" or command == "DONE_ID" or command == "EXCEPTION"):
+                    serverAggregatedTimes[clientID] += (endServerTime - startServerTime)
+                    clientAggregatedTimes[clientID] += (endClientTime - startClientTime)
+                    numTimingMeasures[clientID] += 1
+                if (command == "DONE_ID" or command == "EXCEPTION"):
                     crawlerAggregatedTimes[clientID] += (endCrawlerTime - startCrawlerTime)
                     numCrawlingMeasures[clientID] += 1
                     

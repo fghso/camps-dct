@@ -16,6 +16,7 @@ import json
 import csv
 import common
 import mysql.connector
+import Queue
 from datetime import datetime
 from copy import deepcopy
 from collections import deque
@@ -473,7 +474,7 @@ class FilePersistenceHandler(MemoryPersistenceHandler):
         else: self.config["filetype"] = os.path.splitext(self.config["filename"])[1][1:].lower()
         
         self.config["savetimedelta"] = int(self.config["savetimedelta"])
-        if (self.config["savetimedelta"] < 1): raise ValueError("Parameter savetimedelta must be greater than zero.")
+        if (self.config["savetimedelta"] < 1): raise ValueError("Parameter 'savetimedelta' must be greater than zero.")
     
     def _save(self, pk, id, status, info, changeInfo = True):
         with self.saveLock: MemoryPersistenceHandler._save(self, pk, id, status, info, changeInfo)
@@ -491,7 +492,7 @@ class FilePersistenceHandler(MemoryPersistenceHandler):
     def _checkDumpException(function):
         def decoratedFunction(self, *args):
             if (self.dumpExceptionEvent.is_set()): 
-                raise RuntimeError("Exception on dump thread. Execution of file persistence handler aborted.")
+                raise RuntimeError("Exception on dump thread. Execution of FilePersistenceHandler aborted.")
             return function(self, *args)
         return decoratedFunction
                 
@@ -506,7 +507,7 @@ class FilePersistenceHandler(MemoryPersistenceHandler):
     def timelyDump(self):
         try: 
             self.dump()
-        except Exception as error:
+        except:
             self.dumpExceptionEvent.set()
             raise
         self.timer = threading.Timer(self.config["savetimedelta"], self.timelyDump)
@@ -586,10 +587,10 @@ class RolloverFilePersistenceHandler(FilePersistenceHandler):
         if ("amountthreshold" not in self.config): self.config["amountthreshold"] = 0
         else: self.config["amountthreshold"] = int(self.config["amountthreshold"])
         
-        if (self.config["sizethreshold"] < 0): raise ValueError("Parameter sizethreshold must be zero or greater.")
-        if (self.config["amountthreshold"] < 0): raise ValueError("Parameter amountthreshold must be zero or greater.")
+        if (self.config["sizethreshold"] < 0): raise ValueError("Parameter 'sizethreshold' must be zero or greater.")
+        if (self.config["amountthreshold"] < 0): raise ValueError("Parameter 'amountthreshold' must be zero or greater.")
         if (self.config["sizethreshold"] == 0) and (self.config["amountthreshold"] == 0): 
-            raise ValueError("Parameters sizethreshold and amountthreshold cannot be zero at the same time.")
+            raise ValueError("Parameters 'sizethreshold' and 'amountthreshold' cannot be zero at the same time.")
             
     def _addHandler(self, fileName):
         config = deepcopy(self.originalConfig)
@@ -618,7 +619,7 @@ class RolloverFilePersistenceHandler(FilePersistenceHandler):
             if (self.config["uniqueresourceid"]) and (resourceID in self.IDsHash):
                 handler = self.fileHandlersList[self.IDsHash[resourceID]]
                 try: handler.insert([(resourceID, resourceInfo)])
-                except KeyError as error: raise KeyError("Cannot insert resource, ID %s already exists in '%s'." % (resourceID, handler.config["filename"]))
+                except KeyError: raise KeyError("Cannot insert resource, ID %s already exists in '%s'." % (resourceID, handler.config["filename"]))
                 continue
         
             with self.insertLock:
@@ -671,7 +672,10 @@ class MySQLPersistenceHandler(BasePersistenceHandler):
     """
     def __init__(self, configurationsDictionary):
         BasePersistenceHandler.__init__(self, configurationsDictionary)
+        self.echo = common.EchoHandler(self.config["echo"])
         self.local = threading.local()
+        self.selectCacheExceptionEvent = threading.Event()
+        self.selectEmptyEvent = threading.Event()
         
         # Get column names
         connection = mysql.connector.connect(**self.config["connargs"])
@@ -685,30 +689,76 @@ class MySQLPersistenceHandler(BasePersistenceHandler):
         cursor.close()
         connection.close()
         
+        # Inititate select cache thread
+        self.resourcesQueue = Queue.Queue(self.config["selectcachesize"])
+        t = threading.Thread(target = self._selectCache)
+        t.daemon = True
+        t.start()
+        
     def _extractConfig(self, configurationsDictionary):
         BasePersistenceHandler._extractConfig(self, configurationsDictionary)
+        if ("selectcachesize" not in self.config): raise KeyError("Parameter 'selectcachesize' must be specified.")
         if ("onduplicateupdate" not in self.config): self.config["onduplicateupdate"] = False
         else: self.config["onduplicateupdate"] = common.str2bool(self.config["onduplicateupdate"])
         
+    def _selectCache(self):
+        connection = mysql.connector.connect(**self.config["connargs"])
+        connection.autocommit = True
+        cursor = connection.cursor()
+        query = "SELECT " + self.config["primarykeycolumn"] + " FROM " + self.config["table"] + " WHERE " + self.config["statuscolumn"] + " = %s ORDER BY " + self.config["primarykeycolumn"] + " LIMIT " + self.config["selectcachesize"] 
+        firstSelect = True
+        try:
+            while True:            
+                cursor.execute(query, (self.status.AVAILABLE,))
+                resourcesKeys = cursor.fetchall()
+                if resourcesKeys: 
+                    self.selectEmptyEvent.clear()
+                    self.echo.out("Select cache empty. Filling it now...")
+                    for key in resourcesKeys: self.resourcesQueue.put(key[0])
+                    self.echo.out("Done.")
+                    self.resourcesQueue.join()
+                else: 
+                    self.selectEmptyEvent.set()
+                    # The condition bellow is necessary in order to permit that a table of complete collected
+                    # resources (i.e., a table where all resources have status SUCCEEDED) could be loaded,
+                    # reseted using the manager and then crawled, having its resources assigned to new clients.
+                    if firstSelect:
+                        firstSelect = False
+                        self.resourcesQueue.put(None)
+                        self.resourcesQueue.join()
+                    else: break
+        except: 
+            self.selectCacheExceptionEvent.set()
+            raise
+        finally:
+            cursor.close()
+            connection.close()
+        
     def setup(self):
         self.local.connection = mysql.connector.connect(**self.config["connargs"])
-        self.local.lastSelectID = None
+        self.local.connection.autocommit = True
         
     def select(self):
+        while True:
+            try: 
+                resourceKey = self.resourcesQueue.get(False, 60)
+                if resourceKey: break
+            except Queue.Empty:
+                if self.selectEmptyEvent.is_set(): 
+                    return (None, None, None)
+                elif self.selectCacheExceptionEvent.is_set(): 
+                    raise RuntimeError("Exception on select cache. Execution of MySQLPersistenceHandler aborted.")
         cursor = self.local.connection.cursor(dictionary = True)
-        query = "UPDATE " + self.config["table"] + " SET " + self.config["primarykeycolumn"] + " = LAST_INSERT_ID(" + self.config["primarykeycolumn"] + "), " + self.config["statuscolumn"] + " = %s WHERE " + self.config["statuscolumn"] + " = %s ORDER BY " + self.config["primarykeycolumn"] + " LIMIT 1"
-        cursor.execute(query, (self.status.INPROGRESS, self.status.AVAILABLE))
-        query = "SELECT * FROM " + self.config["table"] + " WHERE " + self.config["primarykeycolumn"] + " = LAST_INSERT_ID()"
-        cursor.execute(query)
+        query = "UPDATE " + self.config["table"] + " SET " + self.config["statuscolumn"] + " = %s WHERE " + self.config["primarykeycolumn"] + " = %s"
+        cursor.execute(query, (self.status.INPROGRESS, resourceKey))
+        self.resourcesQueue.task_done()
+        query = "SELECT * FROM " + self.config["table"] + " WHERE " + self.config["primarykeycolumn"] + " = %s"
+        cursor.execute(query, (resourceKey,))
         resource = cursor.fetchone()
-        self.local.connection.commit()
         cursor.close()
-        if (resource) and (resource[self.config["primarykeycolumn"]] != self.local.lastSelectID): 
-            self.local.lastSelectID = resource[self.config["primarykeycolumn"]]
-            return (resource[self.config["primarykeycolumn"]], 
-                    resource[self.config["resourceidcolumn"]], 
-                    {k: resource[k] for k in self.infoColNames})
-        else: return (None, None, None)
+        return (resource[self.config["primarykeycolumn"]], 
+                resource[self.config["resourceidcolumn"]], 
+                {k: resource[k] for k in self.infoColNames})
         
     def update(self, resourceKey, status, resourceInfo):
         cursor = self.local.connection.cursor()
@@ -719,7 +769,6 @@ class MySQLPersistenceHandler(BasePersistenceHandler):
             info = {k: resourceInfo[k] for k in resourceInfo if (k not in self.excludedColNames)}
             query = "UPDATE " + self.config["table"] + " SET " + self.config["statuscolumn"] + " = %s, " + " = %s, ".join(info.keys()) + " = %s WHERE " + self.config["primarykeycolumn"] + " = %s"
             cursor.execute(query, (status,) + tuple(info.values()) + (resourceKey,))
-        self.local.connection.commit()
         cursor.close()
         
     def insert(self, resourcesList):
@@ -748,7 +797,6 @@ class MySQLPersistenceHandler(BasePersistenceHandler):
             query += " ON DUPLICATE KEY UPDATE " + ", ".join(["{0} = VALUES({0})".format(column) for column in self.infoColNames])
         
         cursor.execute(query, data)
-        self.local.connection.commit()        
         cursor.close()
         
     def count(self):
@@ -775,8 +823,14 @@ class MySQLPersistenceHandler(BasePersistenceHandler):
         query = "UPDATE " + self.config["table"] + " SET " + self.config["statuscolumn"] + " = %s WHERE " + self.config["statuscolumn"] + " = %s"
         cursor.execute(query, (self.status.AVAILABLE, status))
         affectedRows = cursor.rowcount
-        self.local.connection.commit()
         cursor.close()
+        
+        # Clear select cache, so reseted resources are crawled as soon as possible
+        while not self.resourcesQueue.empty():
+            try: self.resourcesQueue.get_nowait()
+            except Queue.Empty: continue
+            self.resourcesQueue.task_done()
+        
         return affectedRows
         
     def finish(self):
