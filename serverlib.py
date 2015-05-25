@@ -383,7 +383,7 @@ class ThreadedTCPServer(SocketServer.ThreadingMixIn, SocketServer.TCPServer):
         self.config = configurationsDictionary
         
         # Configure echoing
-        self.echo = common.EchoHandler(self.config["server"]["echo"], "server[%s%s].log" % (socket.gethostname(), self.config["global"]["connection"]["port"]))
+        self.echo = common.EchoHandler(self.config["server"]["echo"], "server@%s[%s].log" % (socket.gethostname(), self.config["global"]["connection"]["port"]))
         
         # Get persistence handler instance
         self.echo.out("Initializing persistence handler...")

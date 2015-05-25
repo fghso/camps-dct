@@ -26,10 +26,10 @@ class EchoHandler():
     
     """
     
-    defaultConfig = {"verbose": False, "logging": True, "loggingpath": "."}
+    defaultConfig = {"verbose": False, "logging": True, "loggingpath": ".", "loggingfilemode": "w"}
     """Default configuration values. If no local value has been specified for an option in an instance, the value defined here for that option is used instead."""
     
-    mandatoryConfig = {"verbose": None, "logging": None, "loggingpath": None}
+    mandatoryConfig = {"verbose": None, "logging": None, "loggingpath": None, "loggingfilemode": None}
     """Mandatory configuration values. If a value for an option here is ``None``, the handler respects the instance local configuration value for that option (or the default configuration value if no local value has been specified). Otherwise, the value specified here overrides any local value."""
 
     def __init__(self, configurationsDictionary = {}, loggingFileName = "", defaultLoggingLevel = "INFO"):
@@ -57,7 +57,7 @@ class EchoHandler():
         if not os.path.exists(self.loggingPath): os.makedirs(self.loggingPath)
         if (not loggingFileName): loggingFileName = self.callingModuleName + ".log"
         logging.basicConfig(format=u"%(asctime)s %(name)s %(levelname)s: %(message)s", datefmt="%d/%m/%Y %H:%M:%S", 
-                            filename=os.path.join(self.loggingPath, loggingFileName), filemode="w", level=getattr(logging, defaultLoggingLevel))
+                            filename=os.path.join(self.loggingPath, loggingFileName), filemode=self.loggingFileMode, level=getattr(logging, defaultLoggingLevel))
         self.logger = logging.getLogger(self.callingModuleName)
         
     def _extractConfig(self, configurationsDictionary):
@@ -65,13 +65,11 @@ class EchoHandler():
         
         The configurations are extracted from *configurationsDictionary* and stored in separate instance variables. Each configuration has a default value, defined in :attr:`defaultConfig`, so it is possible to use :class:`EchoHandler` without specifying any of them. The values of :attr:`mandatoryConfig` are also checked here and, if set, override the values given in *configurationsDictionary*, as well as default values. 
         
-        Args: 
-            * *configurationsDictionary* (dict): Holds values for the three configuration options supported: verbose (bool), logging (bool) and loggingpath (str).
-        
         """
         self.verbose = EchoHandler.defaultConfig["verbose"]
         self.logging = EchoHandler.defaultConfig["logging"]
         self.loggingPath = EchoHandler.defaultConfig["loggingpath"]
+        self.loggingFileMode = EchoHandler.defaultConfig["loggingfilemode"]
         
         if (configurationsDictionary):
             if ("verbose" in configurationsDictionary): 
@@ -80,10 +78,18 @@ class EchoHandler():
                 self.logging = str2bool(configurationsDictionary["logging"])
             if ("loggingpath" in configurationsDictionary): 
                 self.loggingPath = configurationsDictionary["loggingpath"]
+            if ("loggingfilemode" in configurationsDictionary): 
+                self.loggingFileMode = configurationsDictionary["loggingfilemode"].lower()
+                if (self.loggingFileMode not in  ("overwrite", "append")): 
+                    raise ValueError("Unknow value '%s' for parameter 'loggingfilemode'." % self.loggingFileMode)
         
         if (EchoHandler.mandatoryConfig["verbose"] is not None): self.verbose = EchoHandler.mandatoryConfig["verbose"]
         if (EchoHandler.mandatoryConfig["logging"] is not None): self.logging = EchoHandler.mandatoryConfig["logging"]
         if (EchoHandler.mandatoryConfig["loggingpath"] is not None): self.loggingPath = EchoHandler.mandatoryConfig["loggingpath"]
+        if (EchoHandler.mandatoryConfig["loggingfilemode"] is not None): self.loggingFileMode = EchoHandler.mandatoryConfig["loggingfilemode"]
+        
+        if (self.loggingFileMode == "overwrite"): self.loggingFileMode = "w"
+        elif (self.loggingFileMode == "append"): self.loggingFileMode = "a"
         
     def out(self, message, loggingLevel = "", mode = "both"):
         """Log and/or print a message.
@@ -204,6 +210,11 @@ def loadConfig(configFilePath):
             
         if ("loggingpath" in config["global"]["echo"]): 
             EchoHandler.defaultConfig["loggingpath"] = config["global"]["echo"]["loggingpath"]
+        
+        if ("loggingfilemode" in config["global"]["echo"]): 
+            EchoHandler.defaultConfig["loggingfilemode"] = config["global"]["echo"]["loggingfilemode"].lower()
+            if (EchoHandler.defaultConfig["loggingfilemode"] not in ("overwrite", "append")): 
+                raise ValueError("Unknow value '%s' for parameter 'loggingfilemode'." % self.loggingFileMode)
     
     # Server default values
     if ("echo" not in config["server"]): config["server"]["echo"] = {}

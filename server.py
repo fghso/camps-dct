@@ -14,6 +14,7 @@ parser.add_argument("-h", "--help", action="help", help="show this help message 
 parser.add_argument("-v", "--verbose", metavar="on/off", help="enable/disable information messages on screen")
 parser.add_argument("-g", "--logging", metavar="on/off", help="enable/disable logging on file")
 parser.add_argument("-p", "--loggingPath", metavar="path", help="define path of logging file")
+parser.add_argument("-m", "--loggingFileMode", choices=["overwrite", "append"], help="define the mode in which the logging file has to be opened")
 args = parser.parse_args()
 
 # Add directory of the configuration file to sys.path before import serverlib, so that persistence and filter modules
@@ -27,6 +28,7 @@ config = common.loadConfig(args.configFilePath)
 if (args.verbose is not None): config["global"]["echo"]["mandatory"]["verbose"] = common.str2bool(args.verbose)
 if (args.logging is not None): config["global"]["echo"]["mandatory"]["logging"] = common.str2bool(args.logging)
 if (args.loggingPath is not None): config["global"]["echo"]["mandatory"]["loggingpath"] = args.loggingPath
+if (args.loggingFileMode is not None): config["global"]["echo"]["mandatory"]["loggingfilemode"] = args.loggingFileMode
 
 # Run server
 server = serverlib.ThreadedTCPServer(config)

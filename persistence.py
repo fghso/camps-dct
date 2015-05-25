@@ -701,6 +701,7 @@ class MySQLPersistenceHandler(BasePersistenceHandler):
     def _extractConfig(self, configurationsDictionary):
         BasePersistenceHandler._extractConfig(self, configurationsDictionary)
         if ("selectcachesize" not in self.config): raise KeyError("Parameter 'selectcachesize' must be specified.")
+        if (self.config["selectcachesize"] < 1): raise ValueError("Parameter 'selectcachesize' must be greater than zero.")
         if ("onduplicateupdate" not in self.config): self.config["onduplicateupdate"] = False
         else: self.config["onduplicateupdate"] = common.str2bool(self.config["onduplicateupdate"])
         
@@ -831,10 +832,9 @@ class MySQLPersistenceHandler(BasePersistenceHandler):
         
         # Clear select cache, so reseted resources are crawled as soon as possible
         while not self.resourcesQueue.empty():
-            try: 
-                self.resourcesQueue.get_nowait()
-                self.resourcesQueue.task_done()
+            try: self.resourcesQueue.get_nowait()
             except Queue.Empty: continue
+            self.resourcesQueue.task_done()
         
         return affectedRows
         

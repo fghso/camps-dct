@@ -17,6 +17,7 @@ parser.add_argument("-h", "--help", action="help", help="show this help message 
 parser.add_argument("-v", "--verbose", metavar="on/off", help="enable/disable information messages on screen")
 parser.add_argument("-g", "--logging", metavar="on/off", help="enable/disable logging on file")
 parser.add_argument("-p", "--loggingPath", metavar="path", help="define path of logging file")
+parser.add_argument("-m", "--loggingFileMode", choices=["overwrite", "append"], help="define the mode in which the logging file has to be opened")
 args = parser.parse_args()
 
 # Add directory of the configuration file to sys.path before import crawler, so that the module can easily 
@@ -30,6 +31,7 @@ config = common.loadConfig(args.configFilePath)
 if (args.verbose is not None): config["global"]["echo"]["mandatory"]["verbose"] = common.str2bool(args.verbose)
 if (args.logging is not None): config["global"]["echo"]["mandatory"]["logging"] = common.str2bool(args.logging)
 if (args.loggingPath is not None): config["global"]["echo"]["mandatory"]["loggingpath"] = args.loggingPath
+if (args.loggingFileMode is not None): config["global"]["echo"]["mandatory"]["loggingfilemode"] = args.loggingFileMode
 
 # Connect to server
 processID = os.getpid()
@@ -41,7 +43,7 @@ if (message["command"] == "REFUSED"): sys.exit("ERROR: %s" % message["reason"])
 else: clientID = message["clientid"]
 
 # Configure echoing
-echo = common.EchoHandler(config["client"]["echo"], "client%s[%s%s].log" % (clientID, socket.gethostname(), config["global"]["connection"]["port"]))
+echo = common.EchoHandler(config["client"]["echo"], "client%s@%s[%s].log" % (clientID, socket.gethostname(), config["global"]["connection"]["port"]))
 
 # Get an instance of the crawler
 CrawlerClass = getattr(crawler, config["client"]["crawler"]["class"])
