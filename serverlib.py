@@ -136,9 +136,7 @@ class ServerHandler(SocketServer.BaseRequestHandler):
                     clientsInfo[clientID][3] = None
                     clientsInfo[clientID][4] += 1
                     clientsInfo[clientID][6] = datetime.now()
-                    tryagain = True
-                    while (tryagain):
-                        tryagain = False
+                    while True:
                         # If the client hasn't been removed, check resource availability
                         if (not clientStopEvent.is_set()):
                             (resourceKey, resourceID, resourceInfo) = persist.select()
@@ -149,20 +147,19 @@ class ServerHandler(SocketServer.BaseRequestHandler):
                                 clientsInfo[clientID][6] = datetime.now()
                                 filters = self.applyFilters(resourceID, resourceInfo)
                                 client.send({"command": "GIVE_ID", "resourceid": resourceID, "filters": filters})
+                                break
                             else:
-                                # If there isn't resources available and loopforever is true, wait some time and check again
+                                # If there aren't resources available and loopforever is true, wait some time and check again
                                 if (config["server"]["loopforever"]): 
                                     time.sleep(5)
-                                    tryagain = True
-                                # If there isn't resources available and loopforever is false, finish all clients
+                                # If there aren't resources available and loopforever is false, finish all clients
                                 else:
                                     with shutdownLock: 
                                         if (self.server.state == "running"): 
-                                            echo.out("Task done, finishing clients...")
+                                            echo.out("Task done. Finishing clients...")
                                             self.server.state = "finishing"
                                             for ID in clientsInfo.keys(): self.removeClient(ID)
                                             self.cleanUpThread = True
-                                    tryagain = True
                         # If the client has been removed, finish it
                         else:
                             del clientsInfo[clientID]
@@ -176,6 +173,7 @@ class ServerHandler(SocketServer.BaseRequestHandler):
                                     client.send({"command": "FINISH", "reason": "shut down"})
                                 echo.out("Client %d finished." % clientID)
                             running = False
+                            break
                     
                 elif (command == "DONE_ID"):
                     clientResourceKey = clientsInfo[clientID][2]

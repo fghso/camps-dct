@@ -14,9 +14,9 @@ import glob
 import re
 import json
 import csv
+import Queue
 import common
 import mysql.connector
-import Queue
 from datetime import datetime
 from copy import deepcopy
 from collections import deque
@@ -450,12 +450,10 @@ class FilePersistenceHandler(MemoryPersistenceHandler):
         self.echo = common.EchoHandler(self.config["echo"])
         self.saveLock = threading.Lock()
         self.dumpExceptionEvent = threading.Event()
-        self.timer = threading.Timer(self.config["savetimedelta"], self.timelyDump)
-        self.timer.daemon = True
+
         self._setFileHandler()
-        file = open(self.config["filename"], "r")
-        try:
-            resourcesList = self.fileHandler.load(file, self.fileColumns)
+        with open(self.config["filename"], "r") as inputFile:
+            resourcesList = self.fileHandler.load(inputFile, self.fileColumns)
             for resource in resourcesList:
                 self.statusRecords[resource["status"]].append(len(self.resources))
                 if (self.config["uniqueresourceid"]): 
@@ -463,8 +461,9 @@ class FilePersistenceHandler(MemoryPersistenceHandler):
                     else: raise KeyError("Duplicated ID found in '%s': %s." % (self.config["filename"], resource["id"])) 
                 if ("info" not in resource): resource["info"] = None
                 self.resources.append(resource)
-        except: raise
-        finally: file.close()
+
+        self.timer = threading.Timer(self.config["savetimedelta"], self._dumpTimerThread)
+        self.timer.daemon = True
         self.timer.start()
         
     def _extractConfig(self, configurationsDictionary):
@@ -496,7 +495,7 @@ class FilePersistenceHandler(MemoryPersistenceHandler):
             return function(self, *args)
         return decoratedFunction
                 
-    def dump(self):
+    def _dump(self):
         self.echo.out("Saving list of resources to file '%s'..." % self.config["filename"])
         with tempfile.NamedTemporaryFile(mode = "w", suffix = ".temp", prefix = "dump_", dir = "", delete = False) as temp: 
             with self.saveLock:
@@ -504,15 +503,16 @@ class FilePersistenceHandler(MemoryPersistenceHandler):
         common.replace(temp.name, self.config["filename"])
         self.echo.out("Done.")
         
-    def timelyDump(self):
+    def _dumpTimerThread(self):
         try: 
-            self.dump()
+            self._dump()
         except:
             self.dumpExceptionEvent.set()
             self.echo.out("Exception while saving resources.", "EXCEPTION")
-        self.timer = threading.Timer(self.config["savetimedelta"], self.timelyDump)
-        self.timer.daemon = True
-        self.timer.start()
+        else:
+            self.timer = threading.Timer(self.config["savetimedelta"], self._dumpTimerThread)
+            self.timer.daemon = True
+            self.timer.start()
         
     @_checkDumpException
     def select(self): 
@@ -536,7 +536,7 @@ class FilePersistenceHandler(MemoryPersistenceHandler):
                 
     def shutdown(self): 
         self.timer.cancel()
-        self.dump()
+        self._dump()
         
         
 class RolloverFilePersistenceHandler(FilePersistenceHandler):
@@ -675,7 +675,9 @@ class MySQLPersistenceHandler(BasePersistenceHandler):
         self.echo = common.EchoHandler(self.config["echo"])
         self.local = threading.local()
         self.selectCacheThreadExceptionEvent = threading.Event()
-        self.selectEmptyEvent = threading.Event()
+        self.selectNoResourcesEvent = threading.Event()
+        self.shutdownEvent = threading.Event()
+        self.selectWaitCondition = threading.Condition()
         
         # Get column names
         query = "SELECT * FROM " + self.config["table"] + " LIMIT 0"
@@ -691,7 +693,15 @@ class MySQLPersistenceHandler(BasePersistenceHandler):
         
         # Start select cache thread
         self.resourcesQueue = Queue.Queue(self.config["selectcachesize"])
-        if not self._fillSelectCache(): self.resourcesQueue.put(None)
+        self.echo.out("Starting select cache. Querying database...")
+        resourcesKeys = self._selectCacheQuery()
+        if resourcesKeys: 
+            self.echo.out("Filling cache with resources keys...")
+            for key in resourcesKeys: self.resourcesQueue.put(key[0])
+            self.echo.out("Done.")
+        else: 
+            self.echo.out("No available resources found. Still seeking...")
+            self.selectNoResourcesEvent.set()
         t = threading.Thread(target = self._selectCacheThread)
         t.daemon = True
         t.start()
@@ -703,11 +713,8 @@ class MySQLPersistenceHandler(BasePersistenceHandler):
         if ("onduplicateupdate" not in self.config): self.config["onduplicateupdate"] = False
         else: self.config["onduplicateupdate"] = common.str2bool(self.config["onduplicateupdate"])
         
-    def _fillSelectCache(self):
+    def _selectCacheQuery(self):
         query = "SELECT " + self.config["primarykeycolumn"] + " FROM " + self.config["table"] + " WHERE " + self.config["statuscolumn"] + " = %s ORDER BY " + self.config["primarykeycolumn"] + " LIMIT " + self.config["selectcachesize"] 
-        
-        self.resourcesQueue.join()
-        self.echo.out("Select cache empty. Querying database...")
         connection = mysql.connector.connect(**self.config["connargs"])
         connection.autocommit = True
         cursor = connection.cursor()
@@ -715,24 +722,40 @@ class MySQLPersistenceHandler(BasePersistenceHandler):
         resourcesKeys = cursor.fetchall()
         cursor.close()
         connection.close()
-        
-        if resourcesKeys: 
-            self.selectEmptyEvent.clear()
-            self.echo.out("Filling cache with resources keys...")
-            for key in resourcesKeys: self.resourcesQueue.put(key[0])
-            self.echo.out("Done.")
-            return True
-        else: 
-            self.selectEmptyEvent.set()
-            self.echo.out("No available resource found.")
-            return False
+        return resourcesKeys
         
     def _selectCacheThread(self):
-        try: 
-            while self._fillSelectCache(): pass
+        try:
+            while True:
+                self.resourcesQueue.join()
+                if self.shutdownEvent.is_set(): break
+                if not self.selectNoResourcesEvent.is_set(): self.echo.out("Select cache empty. Querying database...")
+                resourcesKeys = self._selectCacheQuery()
+                if resourcesKeys: 
+                    if self.selectNoResourcesEvent.is_set(): self.echo.out("New resources available now.")
+                    self.selectNoResourcesEvent.clear()
+                    self.echo.out("Filling cache with resources keys...")
+                    for key in resourcesKeys: self.resourcesQueue.put(key[0])
+                    self.echo.out("Done.")
+                else: 
+                    if not self.selectNoResourcesEvent.is_set(): self.echo.out("No available resources found. Still seeking...")
+                    self.selectNoResourcesEvent.set()
+                    self.selectWaitCondition.acquire()
+                    self.selectWaitCondition.wait(10)
+                    self.selectWaitCondition.release()
         except: 
             self.selectCacheThreadExceptionEvent.set()
-            self.echo.out("Exception while filling cache.", "EXCEPTION")
+            self.echo.out("Exception while trying to fill select cache.", "EXCEPTION")
+        else: 
+            self.selectWaitCondition.acquire()
+            self.selectWaitCondition.notify()
+            self.selectWaitCondition.release()
+            
+    def _resetSelectCache(self):
+        while not self.resourcesQueue.empty():
+            try: self.resourcesQueue.get_nowait()
+            except Queue.Empty: continue
+            self.resourcesQueue.task_done()
         
     def setup(self):
         self.local.connection = mysql.connector.connect(**self.config["connargs"])
@@ -742,10 +765,10 @@ class MySQLPersistenceHandler(BasePersistenceHandler):
         # Try to get resource key from select cache
         while True:
             try: 
-                resourceKey = self.resourcesQueue.get(False, 60)
-                if resourceKey: break
+                resourceKey = self.resourcesQueue.get(False, 10)
+                break
             except Queue.Empty:
-                if self.selectEmptyEvent.is_set(): 
+                if self.selectNoResourcesEvent.is_set(): 
                     return (None, None, None)
                 elif self.selectCacheThreadExceptionEvent.is_set(): 
                     raise RuntimeError("Exception in select cache thread. Execution of MySQLPersistenceHandler aborted.")
@@ -803,9 +826,9 @@ class MySQLPersistenceHandler(BasePersistenceHandler):
         cursor.close()
         
     def count(self):
-        cursor = self.local.connection.cursor()
         query = "SELECT " + self.config["statuscolumn"] + ", count(*) FROM " + self.config["table"] + " GROUP BY " + self.config["statuscolumn"]
-        
+    
+        cursor = self.local.connection.cursor()
         cursor.execute(query)
         result = cursor.fetchall()
         cursor.close()
@@ -822,20 +845,30 @@ class MySQLPersistenceHandler(BasePersistenceHandler):
         return tuple(counts)
         
     def reset(self, status):
-        cursor = self.local.connection.cursor()
         query = "UPDATE " + self.config["table"] + " SET " + self.config["statuscolumn"] + " = %s WHERE " + self.config["statuscolumn"] + " = %s"
+    
+        cursor = self.local.connection.cursor()
         cursor.execute(query, (self.status.AVAILABLE, status))
         affectedRows = cursor.rowcount
         cursor.close()
         
-        # Clear select cache, so reseted resources are crawled as soon as possible
-        while not self.resourcesQueue.empty():
-            try: self.resourcesQueue.get_nowait()
-            except Queue.Empty: continue
-            self.resourcesQueue.task_done()
+        # Clear select cache, so reseted resources are collected as soon as possible
+        self._resetSelectCache()
+        self.selectWaitCondition.acquire()
+        self.selectWaitCondition.notify()
+        self.selectWaitCondition.release()
         
         return affectedRows
         
     def finish(self):
         self.local.connection.close()
+        
+    def shutdown(self):
+        self.selectWaitCondition.acquire()
+        self.shutdownEvent.set()
+        self._resetSelectCache()
+        self.selectWaitCondition.notify()
+        self.selectWaitCondition.wait()
+        self.selectWaitCondition.release()
+        
         
