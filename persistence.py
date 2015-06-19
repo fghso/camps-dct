@@ -709,12 +709,13 @@ class MySQLPersistenceHandler(BasePersistenceHandler):
     def _extractConfig(self, configurationsDictionary):
         BasePersistenceHandler._extractConfig(self, configurationsDictionary)
         if ("selectcachesize" not in self.config): raise KeyError("Parameter 'selectcachesize' must be specified.")
-        if (self.config["selectcachesize"] < 1): raise ValueError("Parameter 'selectcachesize' must be greater than zero.")
+        else: self.config["selectcachesize"] = int(self.config["selectcachesize"])
         if ("onduplicateupdate" not in self.config): self.config["onduplicateupdate"] = False
         else: self.config["onduplicateupdate"] = common.str2bool(self.config["onduplicateupdate"])
         
     def _selectCacheQuery(self):
-        query = "SELECT " + self.config["primarykeycolumn"] + " FROM " + self.config["table"] + " WHERE " + self.config["statuscolumn"] + " = %s ORDER BY " + self.config["primarykeycolumn"] + " LIMIT " + self.config["selectcachesize"] 
+        query = "SELECT " + self.config["primarykeycolumn"] + " FROM " + self.config["table"] + " WHERE " + self.config["statuscolumn"] + " = %s ORDER BY " + self.config["primarykeycolumn"]
+        if (self.config["selectcachesize"] > 0): query += " LIMIT %d" % self.config["selectcachesize"]
         connection = mysql.connector.connect(**self.config["connargs"])
         connection.autocommit = True
         cursor = connection.cursor()
@@ -768,10 +769,10 @@ class MySQLPersistenceHandler(BasePersistenceHandler):
                 resourceKey = self.resourcesQueue.get(False, 10)
                 break
             except Queue.Empty:
-                if self.selectNoResourcesEvent.is_set(): 
-                    return (None, None, None)
-                elif self.selectCacheThreadExceptionEvent.is_set(): 
+                if self.selectCacheThreadExceptionEvent.is_set(): 
                     raise RuntimeError("Exception in select cache thread. Execution of MySQLPersistenceHandler aborted.")
+                elif self.selectNoResourcesEvent.is_set(): 
+                    return (None, None, None)
 
         # Fetch resource information and mark it as being processed
         cursor = self.local.connection.cursor(dictionary = True)
