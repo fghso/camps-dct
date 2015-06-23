@@ -496,19 +496,19 @@ class FilePersistenceHandler(MemoryPersistenceHandler):
         return decoratedFunction
                 
     def _dump(self):
-        self.echo.out("Saving list of resources to file '%s'..." % self.config["filename"])
+        self.echo.out("[File: %s] Saving list of resources to file..." % self.config["filename"])
         with tempfile.NamedTemporaryFile(mode = "w", suffix = ".temp", prefix = "dump_", dir = "", delete = False) as temp: 
             with self.saveLock:
                 self.fileHandler.dump(self.resources, temp, self.fileColumns)
         common.replace(temp.name, self.config["filename"])
-        self.echo.out("Done.")
+        self.echo.out("[File: %s] Resources saved." % self.config["filename"])
         
     def _dumpTimerThread(self):
         try: 
             self._dump()
         except:
             self.dumpExceptionEvent.set()
-            self.echo.out("Exception while saving resources.", "EXCEPTION")
+            self.echo.out("[File: %s] Exception while saving resources." % self.config["filename"], "EXCEPTION")
         else:
             self.timer = threading.Timer(self.config["savetimedelta"], self._dumpTimerThread)
             self.timer.daemon = True
@@ -520,11 +520,13 @@ class FilePersistenceHandler(MemoryPersistenceHandler):
 
     @_checkDumpException
     def update(self, resourceKey, status, resourceInfo): 
-        return MemoryPersistenceHandler.update(self, resourceKey, status, resourceInfo)
+        MemoryPersistenceHandler.update(self, resourceKey, status, resourceInfo)
     
     @_checkDumpException
     def insert(self, resourcesList): 
-        return MemoryPersistenceHandler.insert(self, resourcesList)
+        for resourceID, resourceInfo in resourcesList:
+            try: MemoryPersistenceHandler.insert(self, [(resourceID, resourceInfo)])
+            except KeyError: raise KeyError("Cannot insert resource, ID %s already exists in '%s'." % (resourceID, self.config["filename"]))
     
     @_checkDumpException
     def count(self): 
@@ -618,8 +620,9 @@ class RolloverFilePersistenceHandler(FilePersistenceHandler):
         for resourceID, resourceInfo in resourcesList:
             if (self.config["uniqueresourceid"]) and (resourceID in self.IDsHash):
                 handler = self.fileHandlersList[self.IDsHash[resourceID]]
-                try: handler.insert([(resourceID, resourceInfo)])
-                except KeyError: raise KeyError("Cannot insert resource, ID %s already exists in '%s'." % (resourceID, handler.config["filename"]))
+                #try: handler.insert([(resourceID, resourceInfo)])
+                #except KeyError: raise KeyError("Cannot insert resource, ID %s already exists in file '%s'." % (resourceID, handler.config["filename"]))
+                handler.insert([(resourceID, resourceInfo)])
                 continue
         
             with self.insertLock:
@@ -676,7 +679,6 @@ class MySQLPersistenceHandler(BasePersistenceHandler):
         self.local = threading.local()
         self.selectCacheThreadExceptionEvent = threading.Event()
         self.selectNoResourcesEvent = threading.Event()
-        self.shutdownEvent = threading.Event()
         self.selectWaitCondition = threading.Condition()
         
         # Get column names
@@ -693,18 +695,10 @@ class MySQLPersistenceHandler(BasePersistenceHandler):
         
         # Start select cache thread
         self.resourcesQueue = Queue.Queue()
-        self.echo.out("Starting select cache. Querying database...")
-        resourcesKeys = self._selectCacheQuery()
-        if resourcesKeys: 
-            self.echo.out("Filling cache with resources keys...")
-            for key in resourcesKeys: self.resourcesQueue.put(key[0])
-            self.echo.out("Done.")
-        else: 
-            self.echo.out("No available resources found.")
-            self.selectNoResourcesEvent.set()
         t = threading.Thread(target = self._selectCacheThread)
         t.daemon = True
         t.start()
+        with self.selectWaitCondition: self.selectWaitCondition.wait()
         
     def _extractConfig(self, configurationsDictionary):
         BasePersistenceHandler._extractConfig(self, configurationsDictionary)
@@ -727,33 +721,29 @@ class MySQLPersistenceHandler(BasePersistenceHandler):
         
     def _selectCacheThread(self):
         try:
+            previouslyEmpty = False
             while True:
-                self.resourcesQueue.join()
-                with self.selectWaitCondition:
-                    if self.shutdownEvent.is_set(): break
-                    if not self.selectNoResourcesEvent.is_set(): self.echo.out("Select cache empty. Querying database...")
-                    resourcesKeys = self._selectCacheQuery()
-                    if resourcesKeys: 
-                        if self.selectNoResourcesEvent.is_set(): self.echo.out("New resources available now.")
-                        self.selectNoResourcesEvent.clear()
-                        self.echo.out("Filling cache with resources keys...")
-                        for key in resourcesKeys: self.resourcesQueue.put(key[0])
-                        self.echo.out("Done.")
-                    else: 
-                        if not self.selectNoResourcesEvent.is_set(): self.echo.out("No available resources found.")
-                        self.selectNoResourcesEvent.set()
+                if not previouslyEmpty: self.echo.out("[Table: %s] Select cache empty. Querying database..." % self.config["table"])
+                resourcesKeys = self._selectCacheQuery()
+                if resourcesKeys: 
+                    if previouslyEmpty: self.echo.out("[Table: %s] New resources available now." % self.config["table"])
+                    self.selectNoResourcesEvent.clear()
+                    previouslyEmpty = False
+                    self.echo.out("[Table: %s] Filling select cache with resources keys..." % self.config["table"])
+                    for key in resourcesKeys: self.resourcesQueue.put(key[0])
+                    self.echo.out("[Table: %s] Select cache filled." % self.config["table"])
+                    with self.selectWaitCondition: self.selectWaitCondition.notify()
+                    self.resourcesQueue.join()
+                else: 
+                    if not previouslyEmpty: self.echo.out("[Table: %s] No available resources found." % self.config["table"])
+                    self.selectNoResourcesEvent.set()
+                    previouslyEmpty = True
+                    with self.selectWaitCondition: 
+                        self.selectWaitCondition.notify()
                         self.selectWaitCondition.wait()
         except: 
             self.selectCacheThreadExceptionEvent.set()
-            self.echo.out("Exception while trying to fill select cache.", "EXCEPTION")
-        else: 
-            with self.selectWaitCondition: self.selectWaitCondition.notify()
-            
-    def _resetSelectCache(self):
-        while not self.resourcesQueue.empty():
-            try: self.resourcesQueue.get_nowait()
-            except Queue.Empty: continue
-            self.resourcesQueue.task_done()
+            self.echo.out("[Table: %s] Exception while trying to fill select cache." % self.config["table"], "EXCEPTION")
         
     def setup(self):
         self.local.connection = mysql.connector.connect(**self.config["connargs"])
@@ -800,9 +790,8 @@ class MySQLPersistenceHandler(BasePersistenceHandler):
         # The method cursor.executemany() is optimized for multiple inserts, batching all data into a single INSERT INTO
         # statement. This method would be the best to use here but unfortunately it does not parse the DEFAULT keyword 
         # correctly. This way, the alternative is to pre-build the query and send it to cursor.execute() instead.
-    
+
         if not resourcesList: return
-        cursor = self.local.connection.cursor()
         query = "INSERT INTO " + self.config["table"] + " (" + ", ".join(self.colNames) + ") VALUES "
         
         data = []
@@ -822,12 +811,14 @@ class MySQLPersistenceHandler(BasePersistenceHandler):
         if (self.config["onduplicateupdate"]):
             query += " ON DUPLICATE KEY UPDATE " + ", ".join(["{0} = VALUES({0})".format(column) for column in self.infoColNames])
         
+        cursor = self.local.connection.cursor()
         cursor.execute(query, data)
         cursor.close()
+        self.selectNoResourcesEvent.clear()
+        with self.selectWaitCondition: self.selectWaitCondition.notify()
         
     def count(self):
         query = "SELECT " + self.config["statuscolumn"] + ", count(*) FROM " + self.config["table"] + " GROUP BY " + self.config["statuscolumn"]
-    
         cursor = self.local.connection.cursor()
         cursor.execute(query)
         result = cursor.fetchall()
@@ -841,30 +832,17 @@ class MySQLPersistenceHandler(BasePersistenceHandler):
             elif (row[0] == self.status.FAILED): counts[4] = row[1]
             elif (row[0] == self.status.ERROR): counts[5] = row[1]
             counts[0] += row[1]
-        
+            
         return tuple(counts)
         
     def reset(self, status):
         query = "UPDATE " + self.config["table"] + " SET " + self.config["statuscolumn"] + " = %s WHERE " + self.config["statuscolumn"] + " = %s"
-    
         cursor = self.local.connection.cursor()
         cursor.execute(query, (self.status.AVAILABLE, status))
         affectedRows = cursor.rowcount
         cursor.close()
-        
-        # Clear select cache, so reseted resources are collected as soon as possible
-        self._resetSelectCache()
         with self.selectWaitCondition: self.selectWaitCondition.notify()
-        
         return affectedRows
         
     def finish(self):
         self.local.connection.close()
-        
-    def shutdown(self):
-        with self.selectWaitCondition:
-            self.shutdownEvent.set()
-            self._resetSelectCache()
-            self.selectWaitCondition.notify()
-            self.selectWaitCondition.wait()
-        
