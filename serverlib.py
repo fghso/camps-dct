@@ -323,7 +323,7 @@ class ServerHandler(SocketServer.BaseRequestHandler):
                 
     def threadedFilterApplyWrapper(self, filter, resourceID, resourceInfo, outputList):
         data = filter.apply(resourceID, deepcopy(resourceInfo), None)
-        outputList.append({"filter": filter.name, "data": data})
+        outputList.append({"name": filter.name, "data": data})
         
     def threadedFilterCallbackWrapper(self, filter, resourceID, resourceInfo, newResources, extraInfo):
         filter.callback(resourceID, deepcopy(resourceInfo), deepcopy(newResources), deepcopy(extraInfo))
