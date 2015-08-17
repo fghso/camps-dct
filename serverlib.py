@@ -304,9 +304,10 @@ class ServerHandler(SocketServer.BaseRequestHandler):
                 self.server.shutdown()
                 if (self.clientID == 0): self.client.send({"command": "SD_RET", "fail": False})
                 
-            connections -= 1
-            self.client.close()
-            with finishedCondition: finishedCondition.notify_all()
+            with finishedCondition: 
+                connections -= 1
+                self.client.close()
+                finishedCondition.notify_all()
         
     def removeClient(self, ID):
         with removeClientLock:
