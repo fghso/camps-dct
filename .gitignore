@@ -219,3 +219,5 @@ pip-log.txt
 logs/
 *.log
 *.out
+*.pyc
+
